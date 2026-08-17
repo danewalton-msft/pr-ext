@@ -108,6 +108,12 @@ test("getPullRequests queries every project for authored and assigned PRs", asyn
 
   assert.equal(result.displayName, "Ada Lovelace");
   assert.equal(urls.length, 4);
+  assert.ok(
+    urls.some((url) =>
+      url.includes("/_apis/connectionData") &&
+      url.includes("api-version=7.1-preview")
+    )
+  );
   assert.ok(urls.some((url) => url.includes("searchCriteria.creatorId=user-id")));
   assert.ok(urls.some((url) => url.includes("searchCriteria.reviewerId=user-id")));
 });

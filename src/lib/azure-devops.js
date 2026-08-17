@@ -1,4 +1,5 @@
 const API_VERSION = "7.1";
+const CONNECTION_API_VERSION = "7.1-preview";
 const PAGE_SIZE = 100;
 
 export class AzureDevOpsApiError extends Error {
@@ -59,7 +60,7 @@ export async function getAuthenticatedUser(organization, token, fetchImpl = fetc
   const response = await azureRequest(
     organization,
     "/_apis/connectionData",
-    { "api-version": API_VERSION },
+    { "api-version": CONNECTION_API_VERSION },
     token,
     fetchImpl
   );
