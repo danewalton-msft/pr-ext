@@ -93,7 +93,11 @@ async function syncPullRequests() {
   }
 
   try {
-    const pullRequests = await getPullRequests(settings.organization, settings.token);
+    const pullRequests = await getPullRequests(
+      settings.organization,
+      settings.token,
+      settings.repositories
+    );
     const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
     const reviewUrls = new Set(pullRequests.reviewRequested.map(({ url }) => url));
     const authored = pullRequests.authored.filter(({ url }) => !reviewUrls.has(url));

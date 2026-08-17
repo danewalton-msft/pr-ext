@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
 const form = document.querySelector("#settings-form");
 const organization = document.querySelector("#organization");
 const token = document.querySelector("#token");
+const repositories = document.querySelector("#repositories");
 const interval = document.querySelector("#interval");
 const authoredTitle = document.querySelector("#authored-title");
 const reviewTitle = document.querySelector("#review-title");
@@ -17,6 +18,7 @@ const settings = sanitizeSettings({
 
 organization.value = settings.organization;
 token.value = settings.token;
+repositories.value = settings.repositories;
 interval.value = String(settings.syncIntervalMinutes);
 authoredTitle.value = settings.authoredGroupTitle;
 reviewTitle.value = settings.reviewGroupTitle;
@@ -27,6 +29,7 @@ form.addEventListener("submit", async (event) => {
   const nextSettings = sanitizeSettings({
     organization: organization.value,
     token: token.value,
+    repositories: repositories.value,
     syncIntervalMinutes: interval.value,
     authoredGroupTitle: authoredTitle.value,
     reviewGroupTitle: reviewTitle.value,

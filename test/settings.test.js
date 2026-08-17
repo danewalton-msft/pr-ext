@@ -8,6 +8,7 @@ test("sanitizeSettings trims values and accepts supported settings", () => {
     sanitizeSettings({
       token: " token ",
       organization: " contoso ",
+      repositories: " App/Web ",
       syncIntervalMinutes: "30",
       authoredGroupTitle: " Mine ",
       reviewGroupTitle: " Reviews ",
@@ -16,6 +17,7 @@ test("sanitizeSettings trims values and accepts supported settings", () => {
     {
       token: "token",
       organization: "contoso",
+      repositories: "App/Web",
       syncIntervalMinutes: 30,
       authoredGroupTitle: "Mine",
       reviewGroupTitle: "Reviews",

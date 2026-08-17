@@ -10,21 +10,38 @@ export class AzureDevOpsApiError extends Error {
   }
 }
 
-export async function getPullRequests(organization, token, fetchImpl = fetch) {
+export async function getPullRequests(
+  organization,
+  token,
+  repositoryFilters = "",
+  fetchImpl = fetch
+) {
   const organizationName = normalizeOrganization(organization);
-  const [user, projects] = await Promise.all([
-    getAuthenticatedUser(organizationName, token, fetchImpl),
-    getProjects(organizationName, token, fetchImpl)
-  ]);
-
-  const projectRepositories = await mapWithConcurrency(
-    projects,
-    4,
-    (project) => getProjectRepositories(organizationName, project.id, token, fetchImpl)
+  const configuredRepositories = parseRepositoryFilters(
+    repositoryFilters,
+    organizationName
   );
-  const repositories = projectRepositories
-    .flat()
-    .filter((repository) => !repository.isDisabled);
+  const user = await getAuthenticatedUser(organizationName, token, fetchImpl);
+  let projects = [];
+  let repositories = configuredRepositories;
+
+  if (repositories.length === 0) {
+    projects = await getProjects(organizationName, token, fetchImpl);
+    const projectRepositories = await mapWithConcurrency(
+      projects,
+      4,
+      (project) => getProjectRepositories(
+        organizationName,
+        project.id,
+        token,
+        fetchImpl
+      )
+    );
+    repositories = projectRepositories
+      .flat()
+      .filter((repository) => !repository.isDisabled);
+  }
+
   const repositoryResults = await mapWithConcurrency(
     repositories,
     6,
@@ -69,8 +86,11 @@ export async function getPullRequests(organization, token, fetchImpl = fetch) {
 
   return {
     displayName: user.displayName,
-    projectCount: projects.length,
+    projectCount: configuredRepositories.length > 0
+      ? new Set(repositories.map((repository) => repository.project.name)).size
+      : projects.length,
     repositoryCount: repositories.length,
+    repositoryFilterActive: configuredRepositories.length > 0,
     skippedRepositories,
     authored,
     reviewRequested
@@ -250,6 +270,58 @@ export function normalizeOrganization(value) {
 
   const [organization] = url.pathname.split("/").filter(Boolean);
   return organization ?? "";
+}
+
+export function parseRepositoryFilters(value, organization) {
+  const organizationName = normalizeOrganization(organization);
+  const repositories = new Map();
+  const lines = String(value ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    let projectName;
+    let repositoryName;
+
+    if (line.includes("://")) {
+      const url = new URL(line);
+      if (url.hostname !== "dev.azure.com") {
+        throw new Error(`Repository URL must use dev.azure.com: ${line}`);
+      }
+
+      const [urlOrganization, project, gitSegment, repository] =
+        url.pathname.split("/").filter(Boolean);
+      if (
+        urlOrganization !== organizationName ||
+        gitSegment !== "_git" ||
+        !project ||
+        !repository
+      ) {
+        throw new Error(`Invalid repository URL for ${organizationName}: ${line}`);
+      }
+      projectName = decodeURIComponent(project);
+      repositoryName = decodeURIComponent(repository);
+    } else {
+      const parts = line.split("/");
+      if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+        throw new Error(`Use Project/Repository format: ${line}`);
+      }
+      [projectName, repositoryName] = parts.map((part) => part.trim());
+    }
+
+    const key = `${projectName.toLowerCase()}/${repositoryName.toLowerCase()}`;
+    repositories.set(key, {
+      id: repositoryName,
+      name: repositoryName,
+      project: {
+        id: projectName,
+        name: projectName
+      }
+    });
+  }
+
+  return [...repositories.values()];
 }
 
 async function azureRequest(organization, path, params, token, fetchImpl) {

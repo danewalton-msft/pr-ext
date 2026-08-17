@@ -16,7 +16,11 @@
 
         <label for="token">Azure DevOps personal access token</label>
         <input id="token" name="token" type="password" autocomplete="off" required>
-        <p class="help">Create a PAT with Code (Read) and Project and Team (Read) scopes.</p>
+        <p class="help">Use Code (Read). Project and Team (Read) is also needed when scanning the whole organization.</p>
+
+        <label for="repositories">Repositories (optional)</label>
+        <textarea id="repositories" name="repositories" rows="6" placeholder="Project/Repository&#10;https://dev.azure.com/contoso/Project/_git/Repository"></textarea>
+        <p class="help">Enter one repository per line as Project/Repository or an Azure DevOps repository URL. When empty, every accessible repository is scanned.</p>
 
         <label for="interval">Sync interval</label>
         <select id="interval" name="syncIntervalMinutes">

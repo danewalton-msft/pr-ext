@@ -7,12 +7,34 @@ import {
   needsUserReview,
   normalizeOrganization,
   normalizePullRequests,
+  parseRepositoryFilters,
   sameIdentity
 } from "../src/lib/azure-devops.js";
 
 test("normalizeOrganization accepts a name or dev.azure.com URL", () => {
   assert.equal(normalizeOrganization("contoso"), "contoso");
   assert.equal(normalizeOrganization("https://dev.azure.com/contoso/"), "contoso");
+});
+
+test("parseRepositoryFilters accepts names and URLs and removes duplicates", () => {
+  assert.deepEqual(
+    parseRepositoryFilters(
+      "App/Web\nhttps://dev.azure.com/contoso/App/_git/API\napp/web",
+      "contoso"
+    ),
+    [
+      {
+        id: "web",
+        name: "web",
+        project: { id: "app", name: "app" }
+      },
+      {
+        id: "API",
+        name: "API",
+        project: { id: "App", name: "App" }
+      }
+    ]
+  );
 });
 
 test("canonicalPullRequestUrl removes query, fragment, and trailing slash", () => {
@@ -161,7 +183,7 @@ test("getPullRequests queries active PRs in every repository and classifies them
     });
   };
 
-  const result = await getPullRequests("contoso", "token", fetchImpl);
+  const result = await getPullRequests("contoso", "token", "", fetchImpl);
 
   assert.equal(result.displayName, "Ada Lovelace");
   assert.equal(urls.length, 5);
@@ -181,6 +203,36 @@ test("getPullRequests queries active PRs in every repository and classifies them
       url.includes("/_apis/git/repositories/repository-id/pullrequests") &&
       url.includes("searchCriteria.status=active")
     )
+  );
+});
+
+test("getPullRequests bypasses discovery when repositories are configured", async () => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    if (url.includes("/_apis/connectionData")) {
+      return jsonResponse({
+        authenticatedUser: { id: "user-id", displayName: "Ada Lovelace" }
+      });
+    }
+    return jsonResponse({ value: [] });
+  };
+
+  const result = await getPullRequests(
+    "contoso",
+    "token",
+    "App/Web\nServices/API",
+    fetchImpl
+  );
+
+  assert.equal(result.repositoryFilterActive, true);
+  assert.equal(result.projectCount, 2);
+  assert.equal(result.repositoryCount, 2);
+  assert.equal(urls.length, 3);
+  assert.equal(urls.some((url) => url.includes("/_apis/projects")), false);
+  assert.equal(
+    urls.some((url) => url.includes("/App/_apis/git/repositories/Web/pullrequests")),
+    true
   );
 });
 
