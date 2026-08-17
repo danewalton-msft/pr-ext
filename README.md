@@ -17,6 +17,8 @@ It opens or reuses each pull request tab in the most recently focused Edge windo
 
 The organization can be entered as `contoso` or `https://dev.azure.com/contoso`. The PAT is stored in Edge extension local storage and is sent only to `dev.azure.com`. Automatic synchronization runs every 15 minutes by default. The extension badge shows the number of pull requests awaiting your review.
 
+Disabled repositories and repositories for which the PAT lacks Code read permission are skipped and reported after each sync; they do not prevent accessible repositories from being grouped.
+
 ## Review attention rules
 
 A pull request appears in the review group when it is active, is not a draft, lists you as a reviewer, and either your vote is **No vote** (`0`) or Azure DevOps has flagged you for attention. PRs you have approved are omitted unless they are flagged again.

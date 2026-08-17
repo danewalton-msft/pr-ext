@@ -37,10 +37,16 @@ form.addEventListener("submit", async (event) => {
   await chrome.storage.local.set({ settings: nextSettings });
   const result = await chrome.runtime.sendMessage({ type: "sync" });
 
-  status.textContent = result.ok
-    ? `Saved. Found ${result.authoredCount} authored and ${result.reviewCount} awaiting review across ${result.repositoryCount} repositories.`
-    : result.error;
-  status.className = result.ok ? "success" : "error";
+  if (result.ok) {
+    const skipped = result.skippedRepositories?.length
+      ? ` Skipped ${result.skippedRepositories.length} inaccessible repositories.`
+      : "";
+    status.textContent = `Saved. Found ${result.authoredCount} authored and ${result.reviewCount} awaiting review across ${result.repositoryCount} repositories.${skipped}`;
+    status.className = result.skippedRepositories?.length ? "warning" : "success";
+  } else {
+    status.textContent = result.error;
+    status.className = "error";
+  }
   setBusy(false);
 });
 

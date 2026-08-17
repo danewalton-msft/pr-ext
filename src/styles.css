@@ -124,6 +124,10 @@ button.secondary {
   color: #1a7f37;
 }
 
+.warning {
+  color: #9a6700;
+}
+
 .error {
   color: #cf222e;
 }

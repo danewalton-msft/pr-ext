@@ -116,13 +116,33 @@ test("getPullRequests queries active PRs in every repository and classifies them
     }
     if (url.endsWith("/_apis/git/repositories?api-version=7.1")) {
       return jsonResponse({
-        value: [{
-          id: "repository-id",
-          name: "web",
-          webUrl: "https://dev.azure.com/contoso/app/_git/web",
-          project: { id: "project-id", name: "app" }
-        }]
+        value: [
+          {
+            id: "inaccessible-id",
+            name: "private",
+            webUrl: "https://dev.azure.com/contoso/app/_git/private",
+            project: { id: "project-id", name: "app" }
+          },
+          {
+            id: "repository-id",
+            name: "web",
+            webUrl: "https://dev.azure.com/contoso/app/_git/web",
+            project: { id: "project-id", name: "app" }
+          },
+          {
+            id: "disabled-id",
+            name: "old",
+            isDisabled: true,
+            webUrl: "https://dev.azure.com/contoso/app/_git/old",
+            project: { id: "project-id", name: "app" }
+          }
+        ]
       });
+    }
+    if (url.includes("/repositories/inaccessible-id/pullrequests")) {
+      return jsonResponse({
+        message: "TF401019: The Git repository does not exist or you do not have permissions."
+      }, 404);
     }
     return jsonResponse({
       value: [{
@@ -144,9 +164,10 @@ test("getPullRequests queries active PRs in every repository and classifies them
   const result = await getPullRequests("contoso", "token", fetchImpl);
 
   assert.equal(result.displayName, "Ada Lovelace");
-  assert.equal(urls.length, 4);
+  assert.equal(urls.length, 5);
   assert.equal(result.projectCount, 1);
-  assert.equal(result.repositoryCount, 1);
+  assert.equal(result.repositoryCount, 2);
+  assert.deepEqual(result.skippedRepositories, ["app/private"]);
   assert.equal(result.authored.length, 1);
   assert.equal(result.reviewRequested.length, 1);
   assert.ok(

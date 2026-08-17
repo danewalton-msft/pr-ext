@@ -22,19 +22,39 @@ export async function getPullRequests(organization, token, fetchImpl = fetch) {
     4,
     (project) => getProjectRepositories(organizationName, project.id, token, fetchImpl)
   );
-  const repositories = projectRepositories.flat();
-  const repositoryPullRequests = await mapWithConcurrency(
+  const repositories = projectRepositories
+    .flat()
+    .filter((repository) => !repository.isDisabled);
+  const repositoryResults = await mapWithConcurrency(
     repositories,
     6,
-    (repository) => getRepositoryPullRequests(
-      organizationName,
-      repository.project.id,
-      repository.id,
-      token,
-      fetchImpl
-    )
+    async (repository) => {
+      try {
+        const pullRequests = await getRepositoryPullRequests(
+          organizationName,
+          repository.project.id,
+          repository.id,
+          token,
+          fetchImpl
+        );
+        return { pullRequests, skippedRepository: null };
+      } catch (error) {
+        if (isRepositoryAccessError(error)) {
+          return {
+            pullRequests: [],
+            skippedRepository: `${repository.project.name}/${repository.name}`
+          };
+        }
+        throw error;
+      }
+    }
   );
-  const activePullRequests = repositoryPullRequests.flat();
+  const activePullRequests = repositoryResults.flatMap(
+    (result) => result.pullRequests
+  );
+  const skippedRepositories = repositoryResults
+    .map((result) => result.skippedRepository)
+    .filter(Boolean);
 
   const authored = normalizePullRequests(
     activePullRequests.filter((pullRequest) =>
@@ -51,6 +71,7 @@ export async function getPullRequests(organization, token, fetchImpl = fetch) {
     displayName: user.displayName,
     projectCount: projects.length,
     repositoryCount: repositories.length,
+    skippedRepositories,
     authored,
     reviewRequested
   };
@@ -153,6 +174,11 @@ export function sameIdentity(left, right) {
   }
   return Boolean(left.descriptor && right.descriptor &&
     left.descriptor === right.descriptor);
+}
+
+function isRepositoryAccessError(error) {
+  return error instanceof AzureDevOpsApiError &&
+    [401, 403, 404].includes(error.status);
 }
 
 export function needsUserReview(pullRequest, userId) {
