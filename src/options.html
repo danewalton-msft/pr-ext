@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PR Tab Groups settings</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="options">
+    <main>
+      <h1>PR Tab Groups settings</h1>
+      <form id="settings-form">
+        <label for="organization">Azure DevOps organization</label>
+        <input id="organization" name="organization" type="text" placeholder="contoso or https://dev.azure.com/contoso" required>
+        <p class="help">Enter the organization name or its dev.azure.com URL.</p>
+
+        <label for="token">Azure DevOps personal access token</label>
+        <input id="token" name="token" type="password" autocomplete="off" required>
+        <p class="help">Create a PAT with Code (Read) and Project and Team (Read) scopes.</p>
+
+        <label for="interval">Sync interval</label>
+        <select id="interval" name="syncIntervalMinutes">
+          <option value="15">Every 15 minutes</option>
+          <option value="30">Every 30 minutes</option>
+          <option value="60">Every hour</option>
+          <option value="240">Every 4 hours</option>
+        </select>
+
+        <label for="authored-title">Open PR group title</label>
+        <input id="authored-title" name="authoredGroupTitle" type="text" required>
+
+        <label for="review-title">Review group title</label>
+        <input id="review-title" name="reviewGroupTitle" type="text" required>
+
+        <label class="checkbox">
+          <input id="collapsed" name="collapseGroups" type="checkbox">
+          Keep tab groups collapsed after syncing
+        </label>
+
+        <div class="actions">
+          <button type="submit">Save and sync</button>
+          <span id="status" role="status"></span>
+        </div>
+      </form>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

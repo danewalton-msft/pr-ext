@@ -1,0 +1,149 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+body {
+  margin: 0;
+  color: #1f2328;
+  background: #ffffff;
+}
+
+main {
+  padding: 20px;
+}
+
+.popup {
+  width: 340px;
+}
+
+.options main {
+  width: min(600px, calc(100% - 40px));
+  margin: 30px auto;
+}
+
+h1 {
+  margin: 0 0 18px;
+  font-size: 20px;
+}
+
+.summary {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.muted,
+.help {
+  color: #59636e;
+}
+
+.muted {
+  min-height: 40px;
+  margin: 0 0 16px;
+}
+
+form {
+  display: grid;
+  gap: 9px;
+}
+
+label {
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+input,
+select,
+button {
+  box-sizing: border-box;
+  min-height: 38px;
+  border: 1px solid #8c959f;
+  border-radius: 6px;
+  font: inherit;
+}
+
+input,
+select {
+  padding: 7px 10px;
+  background: #ffffff;
+}
+
+button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 14px;
+  border-color: #1f883d;
+  color: #ffffff;
+  background: #1f883d;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+  background: #1a7f37;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+button.secondary {
+  border-color: #d0d7de;
+  color: #1f2328;
+  background: #f6f8fa;
+}
+
+.help {
+  margin: 0;
+  font-size: 12px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+
+.checkbox input {
+  min-height: auto;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.success {
+  color: #1a7f37;
+}
+
+.error {
+  color: #cf222e;
+}
+
+@media (prefers-color-scheme: dark) {
+  body,
+  input,
+  select {
+    color: #f0f6fc;
+    background: #0d1117;
+  }
+
+  .muted,
+  .help {
+    color: #8c959f;
+  }
+
+  button.secondary {
+    border-color: #30363d;
+    color: #f0f6fc;
+    background: #21262d;
+  }
+}

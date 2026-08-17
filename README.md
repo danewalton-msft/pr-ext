@@ -1,0 +1,30 @@
+# PR Tab Groups
+
+PR Tab Groups is a Manifest V3 extension for Microsoft Edge that finds active Azure DevOps pull requests across every project in an organization:
+
+- Pull requests authored by you.
+- Non-draft pull requests where you have not voted yet or are flagged for attention.
+
+It opens or reuses each pull request tab in the most recently focused Edge window and organizes the tabs into separate colored groups. Pull requests that match both searches appear in the review group. When a PR no longer matches, its tab is removed from the managed group but remains open.
+
+## Install
+
+1. In Azure DevOps, create a personal access token with **Code: Read** and **Project and Team: Read** access.
+2. Open `edge://extensions`.
+3. Enable **Developer mode**.
+4. Select **Load unpacked** and choose this repository directory.
+5. Open the extension, select **Settings**, enter your Azure DevOps organization and PAT, and select **Save and sync**.
+
+The organization can be entered as `contoso` or `https://dev.azure.com/contoso`. The PAT is stored in Edge extension local storage and is sent only to `dev.azure.com`. Automatic synchronization runs every 15 minutes by default. The extension badge shows the number of pull requests awaiting your review.
+
+## Review attention rules
+
+A pull request appears in the review group when it is active, is not a draft, lists you as a reviewer, and either your vote is **No vote** (`0`) or Azure DevOps has flagged you for attention. PRs you have approved are omitted unless they are flagged again.
+
+## Development
+
+No build step or third-party dependencies are required.
+
+```sh
+npm test
+```
