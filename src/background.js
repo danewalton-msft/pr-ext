@@ -116,6 +116,8 @@ async function syncPullRequests() {
     const result = {
       ok: true,
       displayName: pullRequests.displayName,
+      projectCount: pullRequests.projectCount,
+      repositoryCount: pullRequests.repositoryCount,
       authoredCount: pullRequests.authored.length,
       reviewCount: pullRequests.reviewRequested.length,
       syncedAt: new Date().toISOString()

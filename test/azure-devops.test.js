@@ -6,7 +6,8 @@ import {
   getPullRequests,
   needsUserReview,
   normalizeOrganization,
-  normalizePullRequests
+  normalizePullRequests,
+  sameIdentity
 } from "../src/lib/azure-devops.js";
 
 test("normalizeOrganization accepts a name or dev.azure.com URL", () => {
@@ -58,6 +59,18 @@ test("needsUserReview includes neutral or flagged reviewers and excludes drafts"
   );
 });
 
+test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
+  assert.equal(
+    sameIdentity({ id: "USER-ID" }, { id: "user-id" }),
+    true
+  );
+  assert.equal(
+    sameIdentity({ descriptor: "aad.user" }, { descriptor: "aad.user" }),
+    true
+  );
+  assert.equal(sameIdentity({ id: "one" }, { id: "two" }), false);
+});
+
 test("normalizePullRequests deduplicates and sorts by creation date", () => {
   const repository = {
     name: "web",
@@ -88,7 +101,7 @@ test("normalizePullRequests deduplicates and sorts by creation date", () => {
   assert.deepEqual(result.map(({ number }) => number), [2, 1]);
 });
 
-test("getPullRequests queries every project for authored and assigned PRs", async () => {
+test("getPullRequests queries active PRs in every repository and classifies them", async () => {
   const urls = [];
   const fetchImpl = async (url) => {
     urls.push(url);
@@ -101,21 +114,53 @@ test("getPullRequests queries every project for authored and assigned PRs", asyn
     if (url.includes("/_apis/projects")) {
       return jsonResponse({ value: [{ id: "project-id" }] });
     }
-    return jsonResponse({ value: [] });
+    if (url.endsWith("/_apis/git/repositories?api-version=7.1")) {
+      return jsonResponse({
+        value: [{
+          id: "repository-id",
+          name: "web",
+          webUrl: "https://dev.azure.com/contoso/app/_git/web",
+          project: { id: "project-id", name: "app" }
+        }]
+      });
+    }
+    return jsonResponse({
+      value: [{
+        title: "My PR",
+        pullRequestId: 42,
+        creationDate: "2026-01-01T00:00:00Z",
+        createdBy: { id: "user-id" },
+        reviewers: [{ id: "user-id", vote: 0 }],
+        repository: {
+          id: "repository-id",
+          name: "web",
+          webUrl: "https://dev.azure.com/contoso/app/_git/web",
+          project: { id: "project-id", name: "app" }
+        }
+      }]
+    });
   };
 
   const result = await getPullRequests("contoso", "token", fetchImpl);
 
   assert.equal(result.displayName, "Ada Lovelace");
   assert.equal(urls.length, 4);
+  assert.equal(result.projectCount, 1);
+  assert.equal(result.repositoryCount, 1);
+  assert.equal(result.authored.length, 1);
+  assert.equal(result.reviewRequested.length, 1);
   assert.ok(
     urls.some((url) =>
       url.includes("/_apis/connectionData") &&
       url.includes("api-version=7.1-preview")
     )
   );
-  assert.ok(urls.some((url) => url.includes("searchCriteria.creatorId=user-id")));
-  assert.ok(urls.some((url) => url.includes("searchCriteria.reviewerId=user-id")));
+  assert.ok(
+    urls.some((url) =>
+      url.includes("/_apis/git/repositories/repository-id/pullrequests") &&
+      url.includes("searchCriteria.status=active")
+    )
+  );
 });
 
 function jsonResponse(body, status = 200) {

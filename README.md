@@ -1,6 +1,6 @@
 # PR Tab Groups
 
-PR Tab Groups is a Manifest V3 extension for Microsoft Edge that finds active Azure DevOps pull requests across every project in an organization:
+PR Tab Groups is a Manifest V3 extension for Microsoft Edge that enumerates every accessible project and repository in an Azure DevOps organization, then finds:
 
 - Pull requests authored by you.
 - Non-draft pull requests where you have not voted yet or are flagged for attention.

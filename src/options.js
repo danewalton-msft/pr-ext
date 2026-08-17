@@ -37,7 +37,9 @@ form.addEventListener("submit", async (event) => {
   await chrome.storage.local.set({ settings: nextSettings });
   const result = await chrome.runtime.sendMessage({ type: "sync" });
 
-  status.textContent = result.ok ? "Saved and synced." : result.error;
+  status.textContent = result.ok
+    ? `Saved. Found ${result.authoredCount} authored and ${result.reviewCount} awaiting review across ${result.repositoryCount} repositories.`
+    : result.error;
   status.className = result.ok ? "success" : "error";
   setBusy(false);
 });

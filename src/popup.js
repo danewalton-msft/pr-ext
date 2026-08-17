@@ -33,8 +33,9 @@ function renderResult(result) {
 
   summary.textContent =
     `${result.authoredCount} open · ${result.reviewCount} awaiting your review`;
-  details.textContent =
-    `Signed in as ${result.displayName} · Updated ${formatDate(result.syncedAt)}`;
+  details.textContent = result.authoredCount === 0 && result.reviewCount === 0
+    ? `No matching PRs across ${result.repositoryCount} repositories · Updated ${formatDate(result.syncedAt)}`
+    : `Signed in as ${result.displayName} · Updated ${formatDate(result.syncedAt)}`;
 }
 
 function setBusy(isBusy) {

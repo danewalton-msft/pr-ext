@@ -17,40 +17,40 @@ export async function getPullRequests(organization, token, fetchImpl = fetch) {
     getProjects(organizationName, token, fetchImpl)
   ]);
 
-  const projectResults = await mapWithConcurrency(projects, 4, async (project) => {
-    const [authored, assignedForReview] = await Promise.all([
-      getProjectPullRequests(
-        organizationName,
-        project.id,
-        { creatorId: user.id },
-        token,
-        fetchImpl
-      ),
-      getProjectPullRequests(
-        organizationName,
-        project.id,
-        { reviewerId: user.id },
-        token,
-        fetchImpl
-      )
-    ]);
-
-    return { authored, assignedForReview };
-  });
+  const projectRepositories = await mapWithConcurrency(
+    projects,
+    4,
+    (project) => getProjectRepositories(organizationName, project.id, token, fetchImpl)
+  );
+  const repositories = projectRepositories.flat();
+  const repositoryPullRequests = await mapWithConcurrency(
+    repositories,
+    6,
+    (repository) => getRepositoryPullRequests(
+      organizationName,
+      repository.project.id,
+      repository.id,
+      token,
+      fetchImpl
+    )
+  );
+  const activePullRequests = repositoryPullRequests.flat();
 
   const authored = normalizePullRequests(
-    projectResults.flatMap((result) => result.authored),
+    activePullRequests.filter((pullRequest) =>
+      sameIdentity(pullRequest.createdBy, user)
+    ),
     organizationName
   );
   const reviewRequested = normalizePullRequests(
-    projectResults
-      .flatMap((result) => result.assignedForReview)
-      .filter((pullRequest) => needsUserReview(pullRequest, user.id)),
+    activePullRequests.filter((pullRequest) => needsUserReview(pullRequest, user.id)),
     organizationName
   );
 
   return {
     displayName: user.displayName,
+    projectCount: projects.length,
+    repositoryCount: repositories.length,
     authored,
     reviewRequested
   };
@@ -94,10 +94,26 @@ export async function getProjects(organization, token, fetchImpl = fetch) {
   return projects;
 }
 
-export async function getProjectPullRequests(
+export async function getProjectRepositories(
   organization,
   projectId,
-  criteria,
+  token,
+  fetchImpl = fetch
+) {
+  const response = await azureRequest(
+    organization,
+    `/${encodeURIComponent(projectId)}/_apis/git/repositories`,
+    { "api-version": API_VERSION },
+    token,
+    fetchImpl
+  );
+  return response.body.value;
+}
+
+export async function getRepositoryPullRequests(
+  organization,
+  projectId,
+  repositoryId,
   token,
   fetchImpl = fetch
 ) {
@@ -111,16 +127,9 @@ export async function getProjectPullRequests(
       "$skip": String(skip)
     };
 
-    if (criteria.creatorId) {
-      params["searchCriteria.creatorId"] = criteria.creatorId;
-    }
-    if (criteria.reviewerId) {
-      params["searchCriteria.reviewerId"] = criteria.reviewerId;
-    }
-
     const response = await azureRequest(
       organization,
-      `/${encodeURIComponent(projectId)}/_apis/git/pullrequests`,
+      `/${encodeURIComponent(projectId)}/_apis/git/repositories/${encodeURIComponent(repositoryId)}/pullrequests`,
       params,
       token,
       fetchImpl
@@ -135,6 +144,17 @@ export async function getProjectPullRequests(
   return pullRequests;
 }
 
+export function sameIdentity(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+  if (left.id && right.id && left.id.toLowerCase() === right.id.toLowerCase()) {
+    return true;
+  }
+  return Boolean(left.descriptor && right.descriptor &&
+    left.descriptor === right.descriptor);
+}
+
 export function needsUserReview(pullRequest, userId) {
   if (pullRequest.isDraft) {
     return false;
@@ -142,7 +162,7 @@ export function needsUserReview(pullRequest, userId) {
 
   const reviewer = pullRequest.reviewers
     ?.flatMap((candidate) => [candidate, ...(candidate.votedFor ?? [])])
-    .find((candidate) => candidate.id.toLowerCase() === userId.toLowerCase());
+    .find((candidate) => candidate.id?.toLowerCase() === userId.toLowerCase());
   return Boolean(reviewer && (reviewer.vote === 0 || reviewer.isFlagged));
 }
 
