@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   canonicalPullRequestUrl,
+  commitIncludesIdentity,
   getPullRequests,
+  isAutomationPullRequest,
   needsUserReview,
   normalizeOrganization,
   normalizePullRequests,
@@ -110,6 +112,26 @@ test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
     true
   );
   assert.equal(sameIdentity({ id: "one" }, { id: "two" }), false);
+});
+
+test("automation ownership matches configured creators and co-author trailers", () => {
+  assert.equal(
+    isAutomationPullRequest(
+      { createdBy: { displayName: "GitHub Copilot" } },
+      "Agency\nGitHub Copilot"
+    ),
+    true
+  );
+  assert.equal(
+    commitIncludesIdentity(
+      {
+        author: { name: "Bot", email: "bot@example.com" },
+        comment: "Change code\n\nCo-authored-by: Ada Lovelace <ada@example.com>"
+      },
+      [{ uniqueName: "ada@example.com" }]
+    ),
+    true
+  );
 });
 
 test("normalizePullRequests deduplicates and sorts by creation date", () => {
@@ -237,6 +259,7 @@ test("getPullRequests queries active PRs in every repository and classifies them
   assert.deepEqual(result.skippedRepositories, ["app/private"]);
   assert.equal(result.activePullRequestCount, 1);
   assert.equal(result.authored.length, 1);
+  assert.equal(result.automationOwnedCount, 0);
   assert.equal(result.reviewRequested.length, 1);
   assert.ok(
     urls.some((url) =>
@@ -269,6 +292,7 @@ test("getPullRequests bypasses discovery when repositories are configured", asyn
     "contoso",
     "token",
     "App/Web\nServices/API",
+    "",
     fetchImpl
   );
 
@@ -281,6 +305,56 @@ test("getPullRequests bypasses discovery when repositories are configured", asyn
     urls.some((url) => url.includes("/App/_apis/git/repositories/Web/pullrequests")),
     true
   );
+});
+
+test("getPullRequests keeps co-authored automation PRs in authored results", async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes("/_apis/connectionData")) {
+      return jsonResponse({
+        authorizedUser: {
+          id: "user-id",
+          providerDisplayName: "Ada Lovelace",
+          properties: {
+            Account: { $value: "ada@example.com" }
+          }
+        }
+      });
+    }
+    if (url.includes("/pullRequests/42/commits")) {
+      return jsonResponse({
+        value: [{
+          author: { name: "Agency", email: "agency@example.com" },
+          comment: "Implement feature\n\nCo-authored-by: Ada Lovelace <ada@example.com>"
+        }]
+      });
+    }
+    return jsonResponse({
+      value: [{
+        title: "Automated PR",
+        pullRequestId: 42,
+        creationDate: "2026-01-01T00:00:00Z",
+        createdBy: { displayName: "Agency" },
+        reviewers: [{ id: "user-id", vote: 10 }],
+        repository: {
+          id: "Web",
+          name: "Web",
+          project: { id: "App", name: "App" }
+        }
+      }]
+    });
+  };
+
+  const result = await getPullRequests(
+    "contoso",
+    "token",
+    "App/Web",
+    "Agency\nGitHub Copilot",
+    fetchImpl
+  );
+
+  assert.equal(result.automationOwnedCount, 1);
+  assert.equal(result.authored.length, 1);
+  assert.equal(result.reviewRequested.length, 0);
 });
 
 function jsonResponse(body, status = 200) {

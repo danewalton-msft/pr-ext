@@ -4,6 +4,7 @@ const form = document.querySelector("#settings-form");
 const organization = document.querySelector("#organization");
 const token = document.querySelector("#token");
 const repositories = document.querySelector("#repositories");
+const automationAuthors = document.querySelector("#automation-authors");
 const interval = document.querySelector("#interval");
 const authoredTitle = document.querySelector("#authored-title");
 const reviewTitle = document.querySelector("#review-title");
@@ -21,6 +22,7 @@ const settings = sanitizeSettings({
 organization.value = settings.organization;
 token.value = settings.token;
 repositories.value = settings.repositories;
+automationAuthors.value = settings.automationAuthors;
 interval.value = String(settings.syncIntervalMinutes);
 authoredTitle.value = settings.authoredGroupTitle;
 reviewTitle.value = settings.reviewGroupTitle;
@@ -37,6 +39,7 @@ form.addEventListener("submit", async (event) => {
     organization: organization.value,
     token: token.value,
     repositories: repositories.value,
+    automationAuthors: automationAuthors.value,
     syncIntervalMinutes: interval.value,
     authoredGroupTitle: authoredTitle.value,
     reviewGroupTitle: reviewTitle.value,
@@ -52,7 +55,10 @@ form.addEventListener("submit", async (event) => {
     const skipped = result.skippedRepositories?.length
       ? ` Skipped ${result.skippedRepositories.length} inaccessible repositories.`
       : "";
-    status.textContent = `Saved. Found ${result.authoredCount} authored and ${result.reviewCount} awaiting review from ${result.activePullRequestCount} active PRs across ${result.repositoryCount} repositories.${skipped}`;
+    const automated = result.automationOwnedCount
+      ? ` (${result.automationOwnedCount} automation-owned)`
+      : "";
+    status.textContent = `Saved. Found ${result.authoredCount} authored/owned${automated} and ${result.reviewCount} awaiting review from ${result.activePullRequestCount} active PRs across ${result.repositoryCount} repositories.${skipped}`;
     status.className = result.skippedRepositories?.length ? "warning" : "success";
   } else {
     status.textContent = result.error;

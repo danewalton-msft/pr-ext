@@ -98,7 +98,8 @@ async function syncPullRequests() {
     const pullRequests = await getPullRequests(
       settings.organization,
       settings.token,
-      settings.repositories
+      settings.repositories,
+      settings.automationAuthors
     );
     const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
     const reviewUrls = new Set(pullRequests.reviewRequested.map(({ url }) => url));
@@ -144,6 +145,7 @@ async function syncPullRequests() {
       skippedRepositories: pullRequests.skippedRepositories,
       activePullRequestCount: pullRequests.activePullRequestCount,
       authoredCount: pullRequests.authored.length,
+      automationOwnedCount: pullRequests.automationOwnedCount,
       reviewCount: pullRequests.reviewRequested.length,
       syncedAt: new Date().toISOString()
     };

@@ -21,6 +21,8 @@ For faster syncs, add one repository per line in Settings using `Project/Reposit
 
 Settings warns when full-organization scanning is enabled, especially with the 5-minute interval. The default tab groups are **🚀 My open PRs** and **👀 Review requested**; both titles remain customizable.
 
+PRs created by configured automation identities (default: `Agency` and `GitHub Copilot`) are also treated as yours when their commits use your author identity or contain a matching `Co-authored-by` trailer. These PRs remain in **🚀 My open PRs** after you approve them and only leave when they are no longer active.
+
 Disabled repositories and repositories for which the PAT lacks Code read permission are skipped and reported after each sync; they do not prevent accessible repositories from being grouped.
 
 By default, tabs for PRs that stop matching move to a collapsed green **✅ Complete** group. Settings can instead close them or leave them open and ungrouped. Only URLs recorded by the previous successful sync are affected; unrelated tabs are never closed or moved. If a completed PR becomes active and matches again, its tab moves back to the appropriate active group.

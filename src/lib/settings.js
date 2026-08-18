@@ -2,6 +2,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   token: "",
   organization: "",
   repositories: "",
+  automationAuthors: "Agency\nGitHub Copilot",
   syncIntervalMinutes: 15,
   authoredGroupTitle: "🚀 My open PRs",
   reviewGroupTitle: "👀 Review requested",
@@ -16,6 +17,9 @@ export function sanitizeSettings(value = {}) {
     token: typeof value.token === "string" ? value.token.trim() : "",
     organization: typeof value.organization === "string" ? value.organization.trim() : "",
     repositories: typeof value.repositories === "string" ? value.repositories.trim() : "",
+    automationAuthors: typeof value.automationAuthors === "string"
+      ? value.automationAuthors.trim()
+      : DEFAULT_SETTINGS.automationAuthors,
     syncIntervalMinutes: Number.isFinite(interval) && interval >= 5 ? interval : 15,
     authoredGroupTitle: groupTitle(
       value.authoredGroupTitle,

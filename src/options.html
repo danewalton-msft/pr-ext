@@ -23,6 +23,10 @@
         <p class="help">Enter one repository per line as Project/Repository or an Azure DevOps repository URL. When empty, every accessible repository is scanned.</p>
         <p id="scope-warning" class="scope-warning" hidden>⚠️ Full organization scan enabled. Every accessible repository is queried on each sync; use a repository list or a 15-minute-or-longer interval to reduce Azure DevOps API traffic.</p>
 
+        <label for="automation-authors">Automation PR authors</label>
+        <textarea id="automation-authors" name="automationAuthors" rows="3" placeholder="Agency&#10;GitHub Copilot"></textarea>
+        <p class="help">Active PRs created by these identities stay in My open PRs when a commit author or Co-authored-by trailer matches your Azure DevOps identity.</p>
+
         <label for="interval">Sync interval</label>
         <select id="interval" name="syncIntervalMinutes">
           <option value="5">Every 5 minutes</option>

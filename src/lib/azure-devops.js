@@ -14,8 +14,13 @@ export async function getPullRequests(
   organization,
   token,
   repositoryFilters = "",
+  automationAuthors = "Agency\nGitHub Copilot",
   fetchImpl = fetch
 ) {
+  if (typeof automationAuthors === "function") {
+    fetchImpl = automationAuthors;
+    automationAuthors = "Agency\nGitHub Copilot";
+  }
   const organizationName = normalizeOrganization(organization);
   const configuredRepositories = parseRepositoryFilters(
     repositoryFilters,
@@ -73,12 +78,38 @@ export async function getPullRequests(
     .map((result) => result.skippedRepository)
     .filter(Boolean);
 
+  const directlyAuthored = activePullRequests.filter((pullRequest) =>
+    user.matchingIdentities.some((identity) =>
+      sameIdentity(pullRequest.createdBy, identity)
+    )
+  );
+  const directlyAuthoredIds = new Set(
+    directlyAuthored.map(pullRequestKey)
+  );
+  const automationCandidates = activePullRequests.filter((pullRequest) =>
+    !directlyAuthoredIds.has(pullRequestKey(pullRequest)) &&
+    isAutomationPullRequest(pullRequest, automationAuthors)
+  );
+  const automationCandidateResults = await mapWithConcurrency(
+    automationCandidates,
+    6,
+    async (pullRequest) => {
+      const commits = await getPullRequestCommits(
+        organizationName,
+        pullRequest.repository.project.id,
+        pullRequest.repository.id,
+        pullRequest.pullRequestId,
+        token,
+        fetchImpl
+      );
+      return commits.some((commit) =>
+        commitIncludesIdentity(commit, user.matchingIdentities)
+      ) ? pullRequest : null;
+    }
+  );
+  const automationOwned = automationCandidateResults.filter(Boolean);
   const authored = normalizePullRequests(
-    activePullRequests.filter((pullRequest) =>
-      user.matchingIdentities.some((identity) =>
-        sameIdentity(pullRequest.createdBy, identity)
-      )
-    ),
+    [...directlyAuthored, ...automationOwned],
     organizationName
   );
   const reviewRequested = normalizePullRequests(
@@ -97,9 +128,75 @@ export async function getPullRequests(
     repositoryFilterActive: configuredRepositories.length > 0,
     skippedRepositories,
     activePullRequestCount: activePullRequests.length,
+    automationOwnedCount: automationOwned.length,
     authored,
     reviewRequested
   };
+}
+
+export async function getPullRequestCommits(
+  organization,
+  projectId,
+  repositoryId,
+  pullRequestId,
+  token,
+  fetchImpl = fetch
+) {
+  const response = await azureRequest(
+    organization,
+    `/${encodeURIComponent(projectId)}/_apis/git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${encodeURIComponent(pullRequestId)}/commits`,
+    {
+      "api-version": API_VERSION,
+      "$top": "250"
+    },
+    token,
+    fetchImpl
+  );
+  return response.body.value;
+}
+
+export function isAutomationPullRequest(pullRequest, automationAuthors) {
+  const authors = String(automationAuthors ?? "")
+    .split(/\r?\n/)
+    .map((author) => author.trim().toLowerCase())
+    .filter(Boolean);
+  const creator = [
+    pullRequest.createdBy?.displayName,
+    pullRequest.createdBy?.uniqueName
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return authors.some((author) => creator.includes(author));
+}
+
+export function commitIncludesIdentity(commit, identities) {
+  const candidates = [
+    commit.author,
+    commit.committer,
+    ...coAuthorIdentities(commit.comment)
+  ].filter(Boolean);
+  return candidates.some((candidate) =>
+    identities.some((identity) => sameIdentity(candidate, identity))
+  );
+}
+
+function coAuthorIdentities(message = "") {
+  const identities = [];
+  const pattern = /^Co-authored-by:\s*(.*?)\s*<([^>]+)>\s*$/gim;
+  let match;
+
+  while ((match = pattern.exec(message)) !== null) {
+    identities.push({
+      name: match[1],
+      email: match[2]
+    });
+  }
+  return identities;
+}
+
+function pullRequestKey(pullRequest) {
+  return `${pullRequest.repository.id}:${pullRequest.pullRequestId}`;
 }
 
 export async function getAuthenticatedUser(organization, token, fetchImpl = fetch) {
@@ -246,6 +343,8 @@ function identityAliases(identity) {
     identity.displayName,
     identity.providerDisplayName,
     identity.customDisplayName,
+    identity.name,
+    identity.email,
     propertyValue(properties.Account),
     propertyValue(properties.AccountName),
     propertyValue(properties.Email),
