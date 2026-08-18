@@ -10,6 +10,10 @@ body {
   background: #ffffff;
 }
 
+a {
+  color: #0969da;
+}
+
 main {
   padding: 20px;
 }
@@ -171,6 +175,10 @@ button.secondary {
   .muted,
   .help {
     color: #8c959f;
+  }
+
+  a {
+    color: #58a6ff;
   }
 
   .scope-warning {

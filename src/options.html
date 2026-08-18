@@ -17,7 +17,7 @@
 
         <label for="token">Azure DevOps personal access token</label>
         <input id="token" name="token" type="password" autocomplete="off">
-        <p class="help">Use Code (Read). Project and Team (Read) is also needed when scanning the whole organization.</p>
+        <p class="help">Use Code (Read). Project and Team (Read) is also needed when scanning the whole organization. <a id="azure-pat-link" href="https://dev.azure.com/" target="_blank" rel="noopener noreferrer">Create an Azure DevOps PAT</a>.</p>
 
         <label for="repositories">Repositories (optional)</label>
         <textarea id="repositories" name="repositories" rows="6" placeholder="Project/Repository&#10;https://dev.azure.com/contoso/Project/_git/Repository"></textarea>
@@ -27,7 +27,7 @@
         <h2>GitHub</h2>
         <label for="github-token">GitHub personal access token</label>
         <input id="github-token" name="githubToken" type="password" autocomplete="off">
-        <p class="help">Use a fine-grained token with Pull requests (Read) and Contents (Read) for the selected repositories.</p>
+        <p class="help">Use a fine-grained token with Pull requests (Read) and Contents (Read) for the selected repositories. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">Create a GitHub token</a>.</p>
 
         <label for="github-repositories">GitHub repositories</label>
         <textarea id="github-repositories" name="githubRepositories" rows="5" placeholder="owner/repository&#10;https://github.com/owner/repository"></textarea>

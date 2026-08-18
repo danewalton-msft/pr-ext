@@ -14,6 +14,7 @@ const collapsed = document.querySelector("#collapsed");
 const staleAction = document.querySelector("#stale-action");
 const status = document.querySelector("#status");
 const scopeWarning = document.querySelector("#scope-warning");
+const azurePatLink = document.querySelector("#azure-pat-link");
 
 const stored = await chrome.storage.local.get("settings");
 const settings = sanitizeSettings({
@@ -33,9 +34,13 @@ reviewTitle.value = settings.reviewGroupTitle;
 collapsed.checked = settings.collapseGroups;
 staleAction.value = settings.staleTabAction;
 updateScopeWarning();
+updateAzurePatLink();
 
 repositories.addEventListener("input", updateScopeWarning);
-organization.addEventListener("input", updateScopeWarning);
+organization.addEventListener("input", () => {
+  updateScopeWarning();
+  updateAzurePatLink();
+});
 token.addEventListener("input", updateScopeWarning);
 interval.addEventListener("change", updateScopeWarning);
 
@@ -91,4 +96,21 @@ function updateScopeWarning() {
     "urgent",
     isFullOrganizationScan && Number(interval.value) < 15
   );
+}
+
+function updateAzurePatLink() {
+  const value = organization.value.trim();
+  let organizationName = value;
+
+  if (value.includes("://")) {
+    try {
+      [organizationName] = new URL(value).pathname.split("/").filter(Boolean);
+    } catch {
+      organizationName = "";
+    }
+  }
+
+  azurePatLink.href = organizationName
+    ? `https://dev.azure.com/${encodeURIComponent(organizationName)}/_usersSettings/tokens`
+    : "https://dev.azure.com/";
 }
