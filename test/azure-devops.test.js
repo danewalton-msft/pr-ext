@@ -142,6 +142,23 @@ test("normalizePullRequests deduplicates and sorts by creation date", () => {
   assert.deepEqual(result.map(({ number }) => number), [2, 1]);
 });
 
+test("normalizePullRequests builds a web URL when Azure omits repository.webUrl", () => {
+  const [pullRequest] = normalizePullRequests([{
+    title: "PR",
+    pullRequestId: 42,
+    creationDate: "2026-01-01T00:00:00Z",
+    repository: {
+      name: "Web API",
+      project: { name: "Customer App" }
+    }
+  }], "contoso");
+
+  assert.equal(
+    pullRequest.url,
+    "https://dev.azure.com/contoso/Customer%20App/_git/Web%20API/pullrequest/42"
+  );
+});
+
 test("getPullRequests queries active PRs in every repository and classifies them", async () => {
   const urls = [];
   const fetchImpl = async (url) => {

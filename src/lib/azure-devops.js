@@ -267,7 +267,11 @@ export function normalizePullRequests(items, organization) {
   const byUrl = new Map();
 
   for (const item of items) {
-    if (!item.repository?.webUrl || !item.pullRequestId) {
+    if (
+      !item.repository?.name ||
+      !item.repository?.project?.name ||
+      !item.pullRequestId
+    ) {
       continue;
     }
 
@@ -288,7 +292,7 @@ export function normalizePullRequests(items, organization) {
 }
 
 export function pullRequestWebUrl(pullRequest, organization) {
-  if (pullRequest.repository.webUrl.startsWith("https://dev.azure.com/")) {
+  if (pullRequest.repository.webUrl?.startsWith("https://dev.azure.com/")) {
     return `${pullRequest.repository.webUrl}/pullrequest/${pullRequest.pullRequestId}`;
   }
 
