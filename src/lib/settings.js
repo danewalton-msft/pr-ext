@@ -14,15 +14,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 export function sanitizeSettings(value = {}) {
   const interval = Number(value.syncIntervalMinutes);
+  const repositories = routeRepositoryUrls(
+    value.repositories,
+    value.githubRepositories
+  );
 
   return {
     token: typeof value.token === "string" ? value.token.trim() : "",
     organization: typeof value.organization === "string" ? value.organization.trim() : "",
-    repositories: typeof value.repositories === "string" ? value.repositories.trim() : "",
+    repositories: repositories.azure,
     githubToken: typeof value.githubToken === "string" ? value.githubToken.trim() : "",
-    githubRepositories: typeof value.githubRepositories === "string"
-      ? value.githubRepositories.trim()
-      : "",
+    githubRepositories: repositories.github,
     automationAuthors: typeof value.automationAuthors === "string"
       ? value.automationAuthors.trim()
       : DEFAULT_SETTINGS.automationAuthors,
@@ -42,6 +44,19 @@ export function sanitizeSettings(value = {}) {
   };
 }
 
+export function routeRepositoryUrls(azureValue, githubValue) {
+  const azure = [];
+  const github = [];
+
+  routeLines(azureValue, "azure", azure, github);
+  routeLines(githubValue, "github", azure, github);
+
+  return {
+    azure: deduplicateLines(azure).join("\n"),
+    github: deduplicateLines(github).join("\n")
+  };
+}
+
 function nonEmptyString(value, fallback) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
@@ -56,4 +71,35 @@ function staleTabAction(value) {
     return value.staleTabAction;
   }
   return value.closeStaleTabs ? "close" : DEFAULT_SETTINGS.staleTabAction;
+}
+
+function routeLines(value, defaultProvider, azure, github) {
+  for (const line of String(value ?? "").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    if (trimmed.includes("://")) {
+      const hostname = new URL(trimmed).hostname;
+      if (hostname === "github.com") {
+        github.push(trimmed);
+        continue;
+      }
+      if (hostname === "dev.azure.com") {
+        azure.push(trimmed);
+        continue;
+      }
+    }
+
+    (defaultProvider === "azure" ? azure : github).push(trimmed);
+  }
+}
+
+function deduplicateLines(lines) {
+  const unique = new Map();
+  for (const line of lines) {
+    unique.set(line.toLowerCase(), line);
+  }
+  return [...unique.values()];
 }

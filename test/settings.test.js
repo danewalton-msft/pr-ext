@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DEFAULT_SETTINGS, sanitizeSettings } from "../src/lib/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  routeRepositoryUrls,
+  sanitizeSettings
+} from "../src/lib/settings.js";
 
 test("sanitizeSettings trims values and accepts supported settings", () => {
   assert.deepEqual(
@@ -67,5 +71,18 @@ test("sanitizeSettings migrates the legacy close-stale checkbox", () => {
   assert.equal(
     sanitizeSettings({ closeStaleTabs: true }).staleTabAction,
     "close"
+  );
+});
+
+test("routeRepositoryUrls moves provider URLs to the correct lists", () => {
+  assert.deepEqual(
+    routeRepositoryUrls(
+      "App/Web\nhttps://github.com/Azure/tinykube",
+      "octo/api\nhttps://dev.azure.com/contoso/App/_git/Service"
+    ),
+    {
+      azure: "App/Web\nhttps://dev.azure.com/contoso/App/_git/Service",
+      github: "https://github.com/Azure/tinykube\nocto/api"
+    }
   );
 });
