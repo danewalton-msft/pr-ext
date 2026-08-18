@@ -31,18 +31,6 @@ dismissButton.addEventListener("click", async () => {
     url: currentPullRequestUrl,
     dismissed: currentDisposition === "review"
   });
-  dismissSelectedButton.addEventListener("click", () =>
-    updateSelectedReviews(reviewList, true)
-  );
-  restoreSelectedButton.addEventListener("click", () =>
-    updateSelectedReviews(dismissedList, false)
-  );
-  selectAllReviewsButton.addEventListener("click", () =>
-    selectAll(reviewList)
-  );
-  selectAllDismissedButton.addEventListener("click", () =>
-    selectAll(dismissedList)
-  );
   if (result.ok) {
     renderResult(result);
     await updateDisposition();
@@ -52,6 +40,18 @@ dismissButton.addEventListener("click", async () => {
   }
   setBusy(false);
 });
+dismissSelectedButton.addEventListener("click", () =>
+  updateSelectedReviews(reviewList, true)
+);
+restoreSelectedButton.addEventListener("click", () =>
+  updateSelectedReviews(dismissedList, false)
+);
+selectAllReviewsButton.addEventListener("click", () =>
+  selectAll(reviewList)
+);
+selectAllDismissedButton.addEventListener("click", () =>
+  selectAll(dismissedList)
+);
 
 const state = await chrome.runtime.sendMessage({ type: "get-state" });
 if (!state.configured) {
