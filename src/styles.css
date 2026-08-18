@@ -189,6 +189,11 @@ button.link-button:hover:not(:disabled) {
   min-height: auto;
 }
 
+.pr-marker {
+  color: #9a6700;
+  text-align: center;
+}
+
 .pr-checkbox span {
   min-width: 0;
 }

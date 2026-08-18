@@ -214,6 +214,10 @@ async function syncPullRequests() {
       dismissedReviewItems: pullRequests.reviewRequested
         .filter(({ url }) => activeDismissedUrls.has(url))
         .map(summarizePullRequest),
+      assignedItems: assigned.map((pullRequest) => ({
+        ...summarizePullRequest(pullRequest),
+        dismissed: activeDismissedUrls.has(pullRequest.url)
+      })),
       syncedAt: new Date().toISOString()
     };
     await chrome.storage.local.set({

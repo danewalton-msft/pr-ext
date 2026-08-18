@@ -37,7 +37,7 @@ For GitHub, the extension uses GitHub's `review-requested` search so direct and 
 
 The assigned/following group contains active Azure DevOps PRs where you remain a reviewer but have no current review action, plus GitHub PRs where you are an assignee. Review requests take priority over authored/owned PRs, which take priority over assigned/following.
 
-To dismiss review requests you do not plan to handle, open the extension and select one or more PRs under **Review requests**, then choose **Move selected to 📌 Following**. The current PR tab also has a one-click action. Overrides persist across refreshes while PRs remain active and can be batch-restored under **Following overrides**.
+To dismiss review requests you do not plan to handle, open the extension and select one or more PRs under **Review requests**, then choose **Move selected to 📌 Following**. The current PR tab also has a one-click action. The popup's **📌 Assigned / following** section shows both automatic entries (such as Azure DevOps PRs you already reviewed) and manual overrides; only manual overrides can be selected and restored.
 
 ## Development
 

@@ -100,24 +100,49 @@ function setBusy(isBusy) {
 
 function renderReviewManager(result) {
   const actionable = result.actionableReviewItems ?? [];
-  const dismissed = result.dismissedReviewItems ?? [];
-  reviewManager.hidden = actionable.length === 0 && dismissed.length === 0;
-  dismissedSection.hidden = dismissed.length === 0;
+  const following = result.assignedItems ??
+    (result.dismissedReviewItems ?? []).map((item) => ({
+      ...item,
+      dismissed: true
+    }));
+  const hasOverrides = following.some((item) => item.dismissed);
+  reviewManager.hidden = actionable.length === 0 && following.length === 0;
+  dismissedSection.hidden = following.length === 0;
   dismissSelectedButton.hidden = actionable.length === 0;
+  selectAllDismissedButton.hidden = !hasOverrides;
+  restoreSelectedButton.hidden = !hasOverrides;
   renderPullRequestList(reviewList, actionable, "review");
-  renderPullRequestList(dismissedList, dismissed, "dismissed");
+  renderPullRequestList(
+    dismissedList,
+    following,
+    "dismissed",
+    (item) => item.dismissed
+  );
 }
 
-function renderPullRequestList(container, items, prefix) {
+function renderPullRequestList(
+  container,
+  items,
+  prefix,
+  isSelectable = () => true
+) {
   container.replaceChildren();
 
   for (const [index, item] of items.entries()) {
     const label = document.createElement("label");
     label.className = "pr-checkbox";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = item.url;
-    checkbox.id = `${prefix}-${index}`;
+    if (isSelectable(item)) {
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = item.url;
+      checkbox.id = `${prefix}-${index}`;
+      label.append(checkbox);
+    } else {
+      const marker = document.createElement("span");
+      marker.className = "pr-marker";
+      marker.textContent = "•";
+      label.append(marker);
+    }
     const text = document.createElement("span");
     const link = document.createElement("a");
     link.href = item.url;
@@ -127,7 +152,7 @@ function renderPullRequestList(container, items, prefix) {
     const repository = document.createElement("small");
     repository.textContent = item.repository;
     text.append(link, repository);
-    label.append(checkbox, text);
+    label.append(text);
     container.append(label);
   }
 }
