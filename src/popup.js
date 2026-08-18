@@ -11,6 +11,8 @@ const dismissedSection = document.querySelector("#dismissed-section");
 const dismissedList = document.querySelector("#dismissed-list");
 const dismissSelectedButton = document.querySelector("#dismiss-selected");
 const restoreSelectedButton = document.querySelector("#restore-selected");
+const selectAllReviewsButton = document.querySelector("#select-all-reviews");
+const selectAllDismissedButton = document.querySelector("#select-all-dismissed");
 let currentPullRequestUrl = null;
 let currentDisposition = null;
 
@@ -34,6 +36,12 @@ dismissButton.addEventListener("click", async () => {
   );
   restoreSelectedButton.addEventListener("click", () =>
     updateSelectedReviews(dismissedList, false)
+  );
+  selectAllReviewsButton.addEventListener("click", () =>
+    selectAll(reviewList)
+  );
+  selectAllDismissedButton.addEventListener("click", () =>
+    selectAll(dismissedList)
   );
   if (result.ok) {
     renderResult(result);
@@ -85,6 +93,8 @@ function setBusy(isBusy) {
   dismissButton.disabled = isBusy;
   dismissSelectedButton.disabled = isBusy;
   restoreSelectedButton.disabled = isBusy;
+  selectAllReviewsButton.disabled = isBusy;
+  selectAllDismissedButton.disabled = isBusy;
   syncButton.textContent = isBusy ? "Syncing..." : "Sync pull requests";
 }
 
@@ -170,10 +180,16 @@ async function updateDisposition() {
     url: currentPullRequestUrl
   });
   currentDisposition = result.disposition;
-  dismissButton.hidden = !currentDisposition;
+  dismissButton.hidden = !currentDisposition || !reviewManager.hidden;
   dismissButton.textContent = currentDisposition === "review"
     ? "Move current review to 📌 Following"
     : "Restore current review request";
+}
+
+function selectAll(container) {
+  container.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+    checkbox.checked = true;
+  });
 }
 
 function formatDate(value) {

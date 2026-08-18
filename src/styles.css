@@ -154,6 +154,27 @@ button.secondary {
   overflow-y: auto;
 }
 
+.list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+button.link-button {
+  width: auto;
+  min-height: auto;
+  margin: 4px 0;
+  padding: 2px;
+  border: 0;
+  color: #0969da;
+  background: transparent;
+  font-size: 12px;
+}
+
+button.link-button:hover:not(:disabled) {
+  background: transparent;
+  text-decoration: underline;
+}
+
 .pr-checkbox {
   display: grid;
   grid-template-columns: auto 1fr;

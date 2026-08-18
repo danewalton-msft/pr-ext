@@ -14,10 +14,16 @@
       <button id="dismiss" class="secondary" type="button" hidden></button>
       <section id="review-manager" hidden>
         <h2>Review requests</h2>
+        <div class="list-toolbar">
+          <button id="select-all-reviews" class="link-button" type="button">Select all</button>
+        </div>
         <div id="review-list" class="pr-list"></div>
         <button id="dismiss-selected" class="secondary" type="button">Move selected to 📌 Following</button>
         <div id="dismissed-section" hidden>
           <h2>Following overrides</h2>
+          <div class="list-toolbar">
+            <button id="select-all-dismissed" class="link-button" type="button">Select all</button>
+          </div>
           <div id="dismissed-list" class="pr-list"></div>
           <button id="restore-selected" class="secondary" type="button">Restore selected reviews</button>
         </div>
