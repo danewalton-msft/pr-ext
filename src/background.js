@@ -7,6 +7,7 @@ import {
   applyReviewDismissals,
   mergeProviderResults
 } from "./lib/provider-results.js";
+import { runExtensionEvent } from "./lib/extension-events.js";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
 import { classifyStaleTabs, shouldGroupTab } from "./lib/tab-sync.js";
 
@@ -18,34 +19,40 @@ const STORAGE_KEYS = {
   dismissedReviewUrls: "dismissedReviewUrls"
 };
 
-chrome.runtime.onInstalled.addListener(async () => {
-  const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
-  const settings = sanitizeSettings({
-    ...DEFAULT_SETTINGS,
-    ...stored[STORAGE_KEYS.settings]
-  });
-  await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
-  await configureAlarm(settings.syncIntervalMinutes);
-});
-
-chrome.runtime.onStartup.addListener(async () => {
-  const settings = await loadSettings();
-  await configureAlarm(settings.syncIntervalMinutes);
-  if (hasConfiguredProvider(settings)) {
-    await syncPullRequests();
-  }
-});
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === ALARM_NAME) {
-    await syncPullRequests();
-  }
-});
-
-chrome.storage.onChanged.addListener(async (changes, areaName) => {
-  if (areaName === "local" && changes[STORAGE_KEYS.settings]) {
-    const settings = sanitizeSettings(changes[STORAGE_KEYS.settings].newValue);
+chrome.runtime.onInstalled.addListener(() => {
+  void runExtensionEvent("Extension setup", async () => {
+    const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
+    const settings = sanitizeSettings({
+      ...DEFAULT_SETTINGS,
+      ...stored[STORAGE_KEYS.settings]
+    });
+    await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
     await configureAlarm(settings.syncIntervalMinutes);
+  });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void runExtensionEvent("Startup sync", async () => {
+    const settings = await loadSettings();
+    await configureAlarm(settings.syncIntervalMinutes);
+    if (hasConfiguredProvider(settings)) {
+      await syncPullRequests();
+    }
+  });
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM_NAME) {
+    void runExtensionEvent("Alarm sync", syncPullRequests);
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === "local" && changes[STORAGE_KEYS.settings]) {
+    void runExtensionEvent("Settings update", async () => {
+      const settings = sanitizeSettings(changes[STORAGE_KEYS.settings].newValue);
+      await configureAlarm(settings.syncIntervalMinutes);
+    });
   }
 });
 
