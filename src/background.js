@@ -1,10 +1,12 @@
 import { canonicalPullRequestUrl, getPullRequests } from "./lib/azure-devops.js";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
+import { classifyStaleTabs } from "./lib/tab-sync.js";
 
 const ALARM_NAME = "sync-pull-requests";
 const STORAGE_KEYS = {
   settings: "settings",
-  status: "syncStatus"
+  status: "syncStatus",
+  managedUrls: "managedPullRequestUrls"
 };
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -101,21 +103,38 @@ async function syncPullRequests() {
     const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
     const reviewUrls = new Set(pullRequests.reviewRequested.map(({ url }) => url));
     const authored = pullRequests.authored.filter(({ url }) => !reviewUrls.has(url));
+    const currentManagedUrls = new Set([
+      ...pullRequests.authored.map(({ url }) => url),
+      ...pullRequests.reviewRequested.map(({ url }) => url)
+    ]);
+    const managedState = await chrome.storage.local.get(STORAGE_KEYS.managedUrls);
+    const staleManagedUrls = new Set(
+      (managedState[STORAGE_KEYS.managedUrls] ?? [])
+        .filter((url) => !currentManagedUrls.has(url))
+    );
 
-    await syncGroup({
+    const completedTabIds = [];
+    completedTabIds.push(...await syncGroup({
       pullRequests: authored,
       title: settings.authoredGroupTitle,
       color: "blue",
       windowId: window.id,
-      collapsed: settings.collapseGroups
-    });
-    await syncGroup({
+      collapsed: settings.collapseGroups,
+      staleTabAction: settings.staleTabAction,
+      staleManagedUrls
+    }));
+    completedTabIds.push(...await syncGroup({
       pullRequests: pullRequests.reviewRequested,
       title: settings.reviewGroupTitle,
       color: "red",
       windowId: window.id,
-      collapsed: settings.collapseGroups
-    });
+      collapsed: settings.collapseGroups,
+      staleTabAction: settings.staleTabAction,
+      staleManagedUrls
+    }));
+    if (completedTabIds.length > 0) {
+      await groupCompletedTabs(completedTabIds, window.id);
+    }
 
     const result = {
       ok: true,
@@ -128,7 +147,10 @@ async function syncPullRequests() {
       reviewCount: pullRequests.reviewRequested.length,
       syncedAt: new Date().toISOString()
     };
-    await saveStatus(result);
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.status]: result,
+      [STORAGE_KEYS.managedUrls]: [...currentManagedUrls]
+    });
     await updateBadge(pullRequests.reviewRequested.length);
     return result;
   } catch (error) {
@@ -143,18 +165,29 @@ async function syncPullRequests() {
   }
 }
 
-async function syncGroup({ pullRequests, title, color, windowId, collapsed }) {
+async function syncGroup({
+  pullRequests,
+  title,
+  color,
+  windowId,
+  collapsed,
+  staleTabAction,
+  staleManagedUrls
+}) {
   const existingGroups = await chrome.tabGroups.query({ windowId, title });
   const existingGroup = existingGroups[0];
 
   if (pullRequests.length === 0) {
     if (existingGroup) {
       const groupedTabs = await chrome.tabs.query({ groupId: existingGroup.id });
-      if (groupedTabs.length > 0) {
-        await chrome.tabs.ungroup(groupedTabs.map(({ id }) => id));
-      }
+      return removeStaleTabs(
+        groupedTabs,
+        new Set(),
+        staleManagedUrls,
+        staleTabAction
+      );
     }
-    return;
+    return [];
   }
 
   const tabs = await chrome.tabs.query({ windowId });
@@ -195,13 +228,47 @@ async function syncGroup({ pullRequests, title, color, windowId, collapsed }) {
   await chrome.tabGroups.update(groupId, { title, color, collapsed });
 
   const groupedTabs = await chrome.tabs.query({ groupId });
-  const currentTabIds = new Set(tabIds);
-  const staleTabIds = groupedTabs
-    .map(({ id }) => id)
-    .filter((id) => !currentTabIds.has(id));
-  if (staleTabIds.length > 0) {
-    await chrome.tabs.ungroup(staleTabIds);
+  return removeStaleTabs(
+    groupedTabs,
+    new Set(tabIds),
+    staleManagedUrls,
+    staleTabAction
+  );
+}
+
+async function removeStaleTabs(
+  groupedTabs,
+  currentTabIds,
+  staleManagedUrls,
+  staleTabAction
+) {
+  const { closeTabIds, completeTabIds, ungroupTabIds } = classifyStaleTabs(
+    groupedTabs,
+    currentTabIds,
+    staleManagedUrls,
+    staleTabAction
+  );
+
+  if (closeTabIds.length > 0) {
+    await chrome.tabs.remove(closeTabIds);
   }
+  if (ungroupTabIds.length > 0) {
+    await chrome.tabs.ungroup(ungroupTabIds);
+  }
+  return completeTabIds;
+}
+
+async function groupCompletedTabs(tabIds, windowId) {
+  const title = "✅ Complete";
+  const existingGroups = await chrome.tabGroups.query({ windowId, title });
+  const groupId = existingGroups.length > 0
+    ? await chrome.tabs.group({ groupId: existingGroups[0].id, tabIds })
+    : await chrome.tabs.group({ createProperties: { windowId }, tabIds });
+  await chrome.tabGroups.update(groupId, {
+    title,
+    color: "green",
+    collapsed: true
+  });
 }
 
 async function saveStatus(status) {

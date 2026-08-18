@@ -5,7 +5,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   syncIntervalMinutes: 15,
   authoredGroupTitle: "🚀 My open PRs",
   reviewGroupTitle: "👀 Review requested",
-  collapseGroups: false
+  collapseGroups: false,
+  staleTabAction: "complete"
 });
 
 export function sanitizeSettings(value = {}) {
@@ -26,7 +27,8 @@ export function sanitizeSettings(value = {}) {
       "ADO review requested",
       DEFAULT_SETTINGS.reviewGroupTitle
     ),
-    collapseGroups: Boolean(value.collapseGroups)
+    collapseGroups: Boolean(value.collapseGroups),
+    staleTabAction: staleTabAction(value)
   };
 }
 
@@ -37,4 +39,11 @@ function nonEmptyString(value, fallback) {
 function groupTitle(value, legacyDefault, currentDefault) {
   const title = nonEmptyString(value, currentDefault);
   return title === legacyDefault ? currentDefault : title;
+}
+
+function staleTabAction(value) {
+  if (["complete", "close", "ungroup"].includes(value.staleTabAction)) {
+    return value.staleTabAction;
+  }
+  return value.closeStaleTabs ? "close" : DEFAULT_SETTINGS.staleTabAction;
 }

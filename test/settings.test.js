@@ -12,7 +12,8 @@ test("sanitizeSettings trims values and accepts supported settings", () => {
       syncIntervalMinutes: "30",
       authoredGroupTitle: " Mine ",
       reviewGroupTitle: " Reviews ",
-      collapseGroups: true
+      collapseGroups: true,
+      staleTabAction: "close"
     }),
     {
       token: "token",
@@ -21,7 +22,8 @@ test("sanitizeSettings trims values and accepts supported settings", () => {
       syncIntervalMinutes: 30,
       authoredGroupTitle: "Mine",
       reviewGroupTitle: "Reviews",
-      collapseGroups: true
+      collapseGroups: true,
+      staleTabAction: "close"
     }
   );
 });
@@ -53,4 +55,11 @@ test("sanitizeSettings migrates untouched legacy group titles", () => {
 
   assert.equal(settings.authoredGroupTitle, "🚀 My open PRs");
   assert.equal(settings.reviewGroupTitle, "👀 Review requested");
+});
+
+test("sanitizeSettings migrates the legacy close-stale checkbox", () => {
+  assert.equal(
+    sanitizeSettings({ closeStaleTabs: true }).staleTabAction,
+    "close"
+  );
 });

@@ -8,6 +8,7 @@ const interval = document.querySelector("#interval");
 const authoredTitle = document.querySelector("#authored-title");
 const reviewTitle = document.querySelector("#review-title");
 const collapsed = document.querySelector("#collapsed");
+const staleAction = document.querySelector("#stale-action");
 const status = document.querySelector("#status");
 const scopeWarning = document.querySelector("#scope-warning");
 
@@ -24,6 +25,7 @@ interval.value = String(settings.syncIntervalMinutes);
 authoredTitle.value = settings.authoredGroupTitle;
 reviewTitle.value = settings.reviewGroupTitle;
 collapsed.checked = settings.collapseGroups;
+staleAction.value = settings.staleTabAction;
 updateScopeWarning();
 
 repositories.addEventListener("input", updateScopeWarning);
@@ -38,7 +40,8 @@ form.addEventListener("submit", async (event) => {
     syncIntervalMinutes: interval.value,
     authoredGroupTitle: authoredTitle.value,
     reviewGroupTitle: reviewTitle.value,
-    collapseGroups: collapsed.checked
+    collapseGroups: collapsed.checked,
+    staleTabAction: staleAction.value
   });
 
   setBusy(true);

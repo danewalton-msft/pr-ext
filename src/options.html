@@ -43,6 +43,14 @@
           Keep tab groups collapsed after syncing
         </label>
 
+        <label for="stale-action">When a PR no longer matches</label>
+        <select id="stale-action" name="staleTabAction">
+          <option value="complete">Move its tab to ✅ Complete</option>
+          <option value="close">Close its tab</option>
+          <option value="ungroup">Leave its tab open and ungrouped</option>
+        </select>
+        <p class="help">Only tabs tracked by a previous successful sync are affected. Unrelated tabs are never closed or moved.</p>
+
         <div class="actions">
           <button type="submit">Save and sync</button>
           <span id="status" role="status"></span>

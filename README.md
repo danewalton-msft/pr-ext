@@ -23,6 +23,8 @@ Settings warns when full-organization scanning is enabled, especially with the 5
 
 Disabled repositories and repositories for which the PAT lacks Code read permission are skipped and reported after each sync; they do not prevent accessible repositories from being grouped.
 
+By default, tabs for PRs that stop matching move to a collapsed green **✅ Complete** group. Settings can instead close them or leave them open and ungrouped. Only URLs recorded by the previous successful sync are affected; unrelated tabs are never closed or moved. If a completed PR becomes active and matches again, its tab moves back to the appropriate active group.
+
 ## Review attention rules
 
 A pull request appears in the review group when it is active, is not a draft, lists you as a reviewer, and either your vote is **No vote** (`0`) or Azure DevOps has flagged you for attention. PRs you have approved are omitted unless they are flagged again.
