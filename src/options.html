@@ -21,9 +21,11 @@
         <label for="repositories">Repositories (optional)</label>
         <textarea id="repositories" name="repositories" rows="6" placeholder="Project/Repository&#10;https://dev.azure.com/contoso/Project/_git/Repository"></textarea>
         <p class="help">Enter one repository per line as Project/Repository or an Azure DevOps repository URL. When empty, every accessible repository is scanned.</p>
+        <p id="scope-warning" class="scope-warning" hidden>⚠️ Full organization scan enabled. Every accessible repository is queried on each sync; use a repository list or a 15-minute-or-longer interval to reduce Azure DevOps API traffic.</p>
 
         <label for="interval">Sync interval</label>
         <select id="interval" name="syncIntervalMinutes">
+          <option value="5">Every 5 minutes</option>
           <option value="15">Every 15 minutes</option>
           <option value="30">Every 30 minutes</option>
           <option value="60">Every hour</option>

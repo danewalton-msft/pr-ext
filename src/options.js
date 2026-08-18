@@ -9,6 +9,7 @@ const authoredTitle = document.querySelector("#authored-title");
 const reviewTitle = document.querySelector("#review-title");
 const collapsed = document.querySelector("#collapsed");
 const status = document.querySelector("#status");
+const scopeWarning = document.querySelector("#scope-warning");
 
 const stored = await chrome.storage.local.get("settings");
 const settings = sanitizeSettings({
@@ -23,6 +24,10 @@ interval.value = String(settings.syncIntervalMinutes);
 authoredTitle.value = settings.authoredGroupTitle;
 reviewTitle.value = settings.reviewGroupTitle;
 collapsed.checked = settings.collapseGroups;
+updateScopeWarning();
+
+repositories.addEventListener("input", updateScopeWarning);
+interval.addEventListener("change", updateScopeWarning);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -57,4 +62,13 @@ function setBusy(isBusy) {
   const submit = form.querySelector("button[type='submit']");
   submit.disabled = isBusy;
   submit.textContent = isBusy ? "Saving..." : "Save and sync";
+}
+
+function updateScopeWarning() {
+  const isFullOrganizationScan = repositories.value.trim() === "";
+  scopeWarning.hidden = !isFullOrganizationScan;
+  scopeWarning.classList.toggle(
+    "urgent",
+    isFullOrganizationScan && Number(interval.value) < 15
+  );
 }

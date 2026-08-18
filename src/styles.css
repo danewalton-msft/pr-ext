@@ -107,6 +107,20 @@ button.secondary {
   font-size: 12px;
 }
 
+.scope-warning {
+  margin: 5px 0 0;
+  padding: 10px;
+  border: 1px solid #d4a72c;
+  border-radius: 6px;
+  color: #7d4e00;
+  background: #fff8c5;
+  font-size: 12px;
+}
+
+.scope-warning.urgent {
+  border-color: #cf222e;
+}
+
 .checkbox {
   display: flex;
   align-items: center;
@@ -150,6 +164,11 @@ button.secondary {
   .muted,
   .help {
     color: #8c959f;
+  }
+
+  .scope-warning {
+    color: #eac54f;
+    background: #2b2300;
   }
 
   button.secondary {
