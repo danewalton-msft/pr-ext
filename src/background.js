@@ -123,6 +123,7 @@ async function syncPullRequests() {
       projectCount: pullRequests.projectCount,
       repositoryCount: pullRequests.repositoryCount,
       skippedRepositories: pullRequests.skippedRepositories,
+      activePullRequestCount: pullRequests.activePullRequestCount,
       authoredCount: pullRequests.authored.length,
       reviewCount: pullRequests.reviewRequested.length,
       syncedAt: new Date().toISOString()

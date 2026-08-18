@@ -44,7 +44,7 @@ form.addEventListener("submit", async (event) => {
     const skipped = result.skippedRepositories?.length
       ? ` Skipped ${result.skippedRepositories.length} inaccessible repositories.`
       : "";
-    status.textContent = `Saved. Found ${result.authoredCount} authored and ${result.reviewCount} awaiting review across ${result.repositoryCount} repositories.${skipped}`;
+    status.textContent = `Saved. Found ${result.authoredCount} authored and ${result.reviewCount} awaiting review from ${result.activePullRequestCount} active PRs across ${result.repositoryCount} repositories.${skipped}`;
     status.className = result.skippedRepositories?.length ? "warning" : "success";
   } else {
     status.textContent = result.error;

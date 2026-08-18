@@ -75,12 +75,16 @@ export async function getPullRequests(
 
   const authored = normalizePullRequests(
     activePullRequests.filter((pullRequest) =>
-      sameIdentity(pullRequest.createdBy, user)
+      user.matchingIdentities.some((identity) =>
+        sameIdentity(pullRequest.createdBy, identity)
+      )
     ),
     organizationName
   );
   const reviewRequested = normalizePullRequests(
-    activePullRequests.filter((pullRequest) => needsUserReview(pullRequest, user.id)),
+    activePullRequests.filter((pullRequest) =>
+      needsUserReview(pullRequest, user.matchingIdentities)
+    ),
     organizationName
   );
 
@@ -92,6 +96,7 @@ export async function getPullRequests(
     repositoryCount: repositories.length,
     repositoryFilterActive: configuredRepositories.length > 0,
     skippedRepositories,
+    activePullRequestCount: activePullRequests.length,
     authored,
     reviewRequested
   };
@@ -105,7 +110,16 @@ export async function getAuthenticatedUser(organization, token, fetchImpl = fetc
     token,
     fetchImpl
   );
-  return response.body.authenticatedUser;
+  const identities = [
+    response.body.authorizedUser,
+    response.body.authenticatedUser
+  ].filter(Boolean);
+  const primary = response.body.authorizedUser ?? response.body.authenticatedUser;
+
+  return {
+    ...primary,
+    matchingIdentities: deduplicateIdentities(identities)
+  };
 }
 
 export async function getProjects(organization, token, fetchImpl = fetch) {
@@ -192,8 +206,12 @@ export function sameIdentity(left, right) {
   if (left.id && right.id && left.id.toLowerCase() === right.id.toLowerCase()) {
     return true;
   }
-  return Boolean(left.descriptor && right.descriptor &&
-    left.descriptor === right.descriptor);
+  if (left.descriptor && right.descriptor &&
+      left.descriptor === right.descriptor) {
+    return true;
+  }
+  return Boolean(left.uniqueName && right.uniqueName &&
+    left.uniqueName.toLowerCase() === right.uniqueName.toLowerCase());
 }
 
 function isRepositoryAccessError(error) {
@@ -201,15 +219,26 @@ function isRepositoryAccessError(error) {
     [401, 403, 404].includes(error.status);
 }
 
-export function needsUserReview(pullRequest, userId) {
+export function needsUserReview(pullRequest, userIdentities) {
   if (pullRequest.isDraft) {
     return false;
   }
 
+  const identities = Array.isArray(userIdentities)
+    ? userIdentities
+    : [{ id: userIdentities }];
   const reviewer = pullRequest.reviewers
     ?.flatMap((candidate) => [candidate, ...(candidate.votedFor ?? [])])
-    .find((candidate) => candidate.id?.toLowerCase() === userId.toLowerCase());
+    .find((candidate) =>
+      identities.some((identity) => sameIdentity(candidate, identity))
+    );
   return Boolean(reviewer && (reviewer.vote === 0 || reviewer.isFlagged));
+}
+
+function deduplicateIdentities(identities) {
+  return identities.filter((identity, index) =>
+    identities.findIndex((candidate) => sameIdentity(candidate, identity)) === index
+  );
 }
 
 export function normalizePullRequests(items, organization) {

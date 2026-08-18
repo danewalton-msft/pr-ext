@@ -90,6 +90,13 @@ test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
     sameIdentity({ descriptor: "aad.user" }, { descriptor: "aad.user" }),
     true
   );
+  assert.equal(
+    sameIdentity(
+      { uniqueName: "Ada@Example.com" },
+      { uniqueName: "ada@example.com" }
+    ),
+    true
+  );
   assert.equal(sameIdentity({ id: "one" }, { id: "two" }), false);
 });
 
@@ -130,7 +137,16 @@ test("getPullRequests queries active PRs in every repository and classifies them
 
     if (url.includes("/_apis/connectionData")) {
       return jsonResponse({
-        authenticatedUser: { id: "user-id", displayName: "Ada Lovelace" }
+        authenticatedUser: {
+          id: "tenant-user-id",
+          displayName: "Ada Tenant",
+          uniqueName: "ada@example.com"
+        },
+        authorizedUser: {
+          id: "user-id",
+          displayName: "Ada Lovelace",
+          uniqueName: "ada@example.com"
+        }
       });
     }
     if (url.includes("/_apis/projects")) {
@@ -190,6 +206,7 @@ test("getPullRequests queries active PRs in every repository and classifies them
   assert.equal(result.projectCount, 1);
   assert.equal(result.repositoryCount, 2);
   assert.deepEqual(result.skippedRepositories, ["app/private"]);
+  assert.equal(result.activePullRequestCount, 1);
   assert.equal(result.authored.length, 1);
   assert.equal(result.reviewRequested.length, 1);
   assert.ok(
@@ -212,7 +229,8 @@ test("getPullRequests bypasses discovery when repositories are configured", asyn
     urls.push(url);
     if (url.includes("/_apis/connectionData")) {
       return jsonResponse({
-        authenticatedUser: { id: "user-id", displayName: "Ada Lovelace" }
+        authenticatedUser: { id: "user-id", displayName: "Ada Lovelace" },
+        authorizedUser: { id: "user-id", displayName: "Ada Lovelace" }
       });
     }
     return jsonResponse({ value: [] });
