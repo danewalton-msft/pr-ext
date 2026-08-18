@@ -1,5 +1,14 @@
 import { canonicalPullRequestUrl } from "./azure-devops.js";
 
+export function shouldGroupTab(tab, targetGroupId, splitViewIdNone = -1) {
+  const isInTargetGroup = targetGroupId !== undefined &&
+    tab.groupId === targetGroupId;
+  const isInSplitView = Number.isInteger(tab.splitViewId) &&
+    tab.splitViewId !== splitViewIdNone;
+
+  return !isInTargetGroup && !isInSplitView;
+}
+
 export function classifyStaleTabs(
   tabs,
   currentTabIds,

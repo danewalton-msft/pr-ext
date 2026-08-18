@@ -8,7 +8,7 @@ import {
   mergeProviderResults
 } from "./lib/provider-results.js";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
-import { classifyStaleTabs } from "./lib/tab-sync.js";
+import { classifyStaleTabs, shouldGroupTab } from "./lib/tab-sync.js";
 
 const ALARM_NAME = "sync-pull-requests";
 const STORAGE_KEYS = {
@@ -266,6 +266,7 @@ async function syncGroup({
 
   const tabs = await chrome.tabs.query({ windowId });
   const tabsByUrl = new Map();
+  const splitViewIdNone = chrome.tabs.SPLIT_VIEW_ID_NONE ?? -1;
 
   for (const tab of tabs) {
     if (!tab.url) {
@@ -273,13 +274,32 @@ async function syncGroup({
     }
 
     try {
-      tabsByUrl.set(canonicalPullRequestUrl(tab.url), tab);
+      const url = canonicalPullRequestUrl(tab.url);
+      const existingTab = tabsByUrl.get(url);
+      const tabIsInTargetGroup = Boolean(
+        existingGroup && tab.groupId === existingGroup.id
+      );
+      const existingTabIsInTargetGroup = Boolean(
+        existingGroup && existingTab?.groupId === existingGroup.id
+      );
+      if (
+        !existingTab ||
+        tabIsInTargetGroup ||
+        (
+          !existingTabIsInTargetGroup &&
+          shouldGroupTab(tab, existingGroup?.id, splitViewIdNone) &&
+          !shouldGroupTab(existingTab, existingGroup?.id, splitViewIdNone)
+        )
+      ) {
+        tabsByUrl.set(url, tab);
+      }
     } catch {
       // Internal browser pages and invalid URLs cannot represent Azure DevOps PRs.
     }
   }
 
-  const tabIds = [];
+  const currentTabIds = [];
+  const tabIdsToGroup = [];
   for (const pullRequest of pullRequests) {
     let tab = tabsByUrl.get(pullRequest.url);
 
@@ -292,19 +312,34 @@ async function syncGroup({
       tabsByUrl.set(pullRequest.url, tab);
     }
 
-    tabIds.push(tab.id);
+    currentTabIds.push(tab.id);
+    if (shouldGroupTab(tab, existingGroup?.id, splitViewIdNone)) {
+      tabIdsToGroup.push(tab.id);
+    }
   }
 
-  const groupId = existingGroup
-    ? await chrome.tabs.group({ groupId: existingGroup.id, tabIds })
-    : await chrome.tabs.group({ createProperties: { windowId }, tabIds });
+  let groupId = existingGroup?.id;
+  if (tabIdsToGroup.length > 0) {
+    groupId = existingGroup
+      ? await chrome.tabs.group({
+        groupId: existingGroup.id,
+        tabIds: tabIdsToGroup
+      })
+      : await chrome.tabs.group({
+        createProperties: { windowId },
+        tabIds: tabIdsToGroup
+      });
+  }
+
+  if (groupId === undefined) {
+    return [];
+  }
 
   await chrome.tabGroups.update(groupId, { title, color, collapsed });
-
   const groupedTabs = await chrome.tabs.query({ groupId });
   return removeStaleTabs(
     groupedTabs,
-    new Set(tabIds),
+    new Set(currentTabIds),
     staleManagedUrls,
     staleTabAction
   );

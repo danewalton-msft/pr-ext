@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { classifyStaleTabs } from "../src/lib/tab-sync.js";
+import {
+  classifyStaleTabs,
+  shouldGroupTab
+} from "../src/lib/tab-sync.js";
+
+test("shouldGroupTab avoids disrupting tabs already grouped or in split view", () => {
+  assert.equal(shouldGroupTab({ groupId: 7 }, 7), false);
+  assert.equal(
+    shouldGroupTab({ groupId: -1, splitViewId: 12 }, 7, -1),
+    false
+  );
+  assert.equal(
+    shouldGroupTab({ groupId: -1, splitViewId: -1 }, 7, -1),
+    true
+  );
+  assert.equal(shouldGroupTab({ groupId: -1 }, 7, -1), true);
+});
 
 test("classifyStaleTabs closes only previously managed stale PR tabs", () => {
   const staleUrl = "https://dev.azure.com/contoso/app/_git/web/pullrequest/1";

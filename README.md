@@ -23,6 +23,8 @@ GitHub requires a repository list. Enter one repository per line as `owner/repos
 
 Settings warns when full-organization scanning is enabled, especially with the 5-minute interval. The default active tab groups are **🚀 My open PRs**, **👀 Review requested**, and **📌 Assigned / following**; all titles remain customizable.
 
+Sync preserves PR tabs that Edge has placed in split view rather than forcing them through a tab-group operation that can break the split. If Edge temporarily removes a split-view tab from its group, the extension groups it again after it leaves split view.
+
 Across both providers, PRs created by configured automation identities (default: `Agency` and `GitHub Copilot`) are also treated as yours when their commits use your author identity or contain a matching `Co-authored-by` trailer. These PRs remain in **🚀 My open PRs** after you approve them and only leave when they are no longer active.
 
 Disabled repositories and repositories for which the PAT lacks Code read permission are skipped and reported after each sync; they do not prevent accessible repositories from being grouped.
