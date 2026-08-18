@@ -28,22 +28,23 @@ export function mergePullRequests(pullRequests) {
 }
 
 export function applyReviewDismissals(pullRequests, dismissedUrls) {
+  const authored = pullRequests.authored;
+  const authoredUrls = new Set(authored.map(({ url }) => url));
+  const requestedReviews = pullRequests.reviewRequested.filter(
+    ({ url }) => !authoredUrls.has(url)
+  );
   const requestedUrls = new Set(
-    pullRequests.reviewRequested.map(({ url }) => url)
+    requestedReviews.map(({ url }) => url)
   );
   const activeDismissedUrls = new Set(
     [...dismissedUrls].filter((url) => requestedUrls.has(url))
   );
-  const reviewRequested = pullRequests.reviewRequested.filter(
+  const reviewRequested = requestedReviews.filter(
     ({ url }) => !activeDismissedUrls.has(url)
   );
   const reviewUrls = new Set(reviewRequested.map(({ url }) => url));
-  const authored = pullRequests.authored.filter(
-    ({ url }) => !reviewUrls.has(url)
-  );
-  const authoredUrls = new Set(authored.map(({ url }) => url));
-  const dismissedReviews = pullRequests.reviewRequested.filter(
-    ({ url }) => activeDismissedUrls.has(url) && !authoredUrls.has(url)
+  const dismissedReviews = requestedReviews.filter(
+    ({ url }) => activeDismissedUrls.has(url)
   );
   const assigned = mergePullRequests([
     ...pullRequests.assigned,

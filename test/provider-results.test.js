@@ -59,3 +59,21 @@ test("applyReviewDismissals moves dismissed reviews into assigned", () => {
   assert.deepEqual(result.assigned, [review]);
   assert.deepEqual([...result.activeDismissedUrls], [review.url]);
 });
+
+test("applyReviewDismissals keeps co-authored PRs out of popup actions", () => {
+  const coAuthored = {
+    title: "Automation-owned PR",
+    url: "https://github.com/octo/web/pull/3",
+    updatedAt: "2026-03-01T00:00:00Z"
+  };
+  const result = applyReviewDismissals({
+    authored: [coAuthored],
+    reviewRequested: [coAuthored],
+    assigned: [coAuthored]
+  }, new Set([coAuthored.url]));
+
+  assert.deepEqual(result.authored, [coAuthored]);
+  assert.deepEqual(result.reviewRequested, []);
+  assert.deepEqual(result.assigned, []);
+  assert.deepEqual([...result.activeDismissedUrls], []);
+});
