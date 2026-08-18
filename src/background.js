@@ -1,4 +1,9 @@
-import { canonicalPullRequestUrl, getPullRequests } from "./lib/azure-devops.js";
+import {
+  canonicalPullRequestUrl,
+  getPullRequests as getAzurePullRequests
+} from "./lib/azure-devops.js";
+import { getGitHubPullRequests, GitHubApiError } from "./lib/github.js";
+import { mergeProviderResults } from "./lib/provider-results.js";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
 import { classifyStaleTabs } from "./lib/tab-sync.js";
 
@@ -22,7 +27,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(async () => {
   const settings = await loadSettings();
   await configureAlarm(settings.syncIntervalMinutes);
-  if (settings.token && settings.organization) {
+  if (hasConfiguredProvider(settings)) {
     await syncPullRequests();
   }
 });
@@ -72,7 +77,7 @@ async function getState() {
 
   const settings = sanitizeSettings(stored[STORAGE_KEYS.settings]);
   return {
-    configured: Boolean(settings.token && settings.organization),
+    configured: hasConfiguredProvider(settings),
     status: stored[STORAGE_KEYS.status] ?? null
   };
 }
@@ -85,21 +90,35 @@ async function configureAlarm(periodInMinutes) {
 async function syncPullRequests() {
   const settings = await loadSettings();
 
-  if (!settings.token || !settings.organization) {
+  const configurationError = validateProviderSettings(settings);
+  if (configurationError) {
     const result = {
       ok: false,
-      error: "Add an Azure DevOps organization and personal access token in Settings."
+      error: configurationError
     };
     await saveStatus(result);
     return result;
   }
 
   try {
-    const pullRequests = await getPullRequests(
-      settings.organization,
-      settings.token,
-      settings.repositories,
-      settings.automationAuthors
+    const providerRequests = [];
+    if (settings.token && settings.organization) {
+      providerRequests.push(getAzurePullRequests(
+        settings.organization,
+        settings.token,
+        settings.repositories,
+        settings.automationAuthors
+      ));
+    }
+    if (settings.githubToken && settings.githubRepositories) {
+      providerRequests.push(getGitHubPullRequests(
+        settings.githubToken,
+        settings.githubRepositories,
+        settings.automationAuthors
+      ));
+    }
+    const pullRequests = mergeProviderResults(
+      await Promise.all(providerRequests)
     );
     const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
     const reviewUrls = new Set(pullRequests.reviewRequested.map(({ url }) => url));
@@ -140,7 +159,6 @@ async function syncPullRequests() {
     const result = {
       ok: true,
       displayName: pullRequests.displayName,
-      projectCount: pullRequests.projectCount,
       repositoryCount: pullRequests.repositoryCount,
       skippedRepositories: pullRequests.skippedRepositories,
       activePullRequestCount: pullRequests.activePullRequestCount,
@@ -285,6 +303,15 @@ async function updateBadge(reviewCount) {
 }
 
 function friendlyError(error) {
+  if (error instanceof GitHubApiError) {
+    if (error.status === 401) {
+      return "GitHub rejected the token. Update it in Settings.";
+    }
+    if (error.status === 403) {
+      return "GitHub denied access or its API rate limit was reached.";
+    }
+    return `GitHub: ${error.message}`;
+  }
   if (error?.status === 401) {
     return "Azure DevOps rejected the token. Update it in Settings.";
   }
@@ -292,4 +319,32 @@ function friendlyError(error) {
     return "Azure DevOps denied access. Check the token scopes and organization.";
   }
   return error?.message || "The pull request sync failed.";
+}
+
+function hasConfiguredProvider(settings) {
+  return Boolean(
+    (settings.token && settings.organization) ||
+    (settings.githubToken && settings.githubRepositories)
+  );
+}
+
+function validateProviderSettings(settings) {
+  const azurePartiallyConfigured = Boolean(settings.token || settings.organization);
+  if (azurePartiallyConfigured && !(settings.token && settings.organization)) {
+    return "Azure DevOps requires both an organization and personal access token.";
+  }
+
+  const githubPartiallyConfigured = Boolean(
+    settings.githubToken || settings.githubRepositories
+  );
+  if (
+    githubPartiallyConfigured &&
+    !(settings.githubToken && settings.githubRepositories)
+  ) {
+    return "GitHub requires both a personal access token and repository list.";
+  }
+
+  return hasConfiguredProvider(settings)
+    ? null
+    : "Configure Azure DevOps, GitHub, or both in Settings.";
 }

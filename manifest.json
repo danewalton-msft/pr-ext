@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PR Tab Groups",
   "version": "1.0.0",
-  "description": "Keeps your open Azure DevOps pull requests and review requests organized in Edge tab groups.",
+  "description": "Keeps your Azure DevOps and GitHub pull requests organized in Edge tab groups.",
   "permissions": [
     "alarms",
     "storage",
@@ -10,7 +10,8 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://dev.azure.com/*"
+    "https://dev.azure.com/*",
+    "https://api.github.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",

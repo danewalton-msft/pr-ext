@@ -4,6 +4,8 @@ const form = document.querySelector("#settings-form");
 const organization = document.querySelector("#organization");
 const token = document.querySelector("#token");
 const repositories = document.querySelector("#repositories");
+const githubToken = document.querySelector("#github-token");
+const githubRepositories = document.querySelector("#github-repositories");
 const automationAuthors = document.querySelector("#automation-authors");
 const interval = document.querySelector("#interval");
 const authoredTitle = document.querySelector("#authored-title");
@@ -22,6 +24,8 @@ const settings = sanitizeSettings({
 organization.value = settings.organization;
 token.value = settings.token;
 repositories.value = settings.repositories;
+githubToken.value = settings.githubToken;
+githubRepositories.value = settings.githubRepositories;
 automationAuthors.value = settings.automationAuthors;
 interval.value = String(settings.syncIntervalMinutes);
 authoredTitle.value = settings.authoredGroupTitle;
@@ -31,6 +35,8 @@ staleAction.value = settings.staleTabAction;
 updateScopeWarning();
 
 repositories.addEventListener("input", updateScopeWarning);
+organization.addEventListener("input", updateScopeWarning);
+token.addEventListener("input", updateScopeWarning);
 interval.addEventListener("change", updateScopeWarning);
 
 form.addEventListener("submit", async (event) => {
@@ -39,6 +45,8 @@ form.addEventListener("submit", async (event) => {
     organization: organization.value,
     token: token.value,
     repositories: repositories.value,
+    githubToken: githubToken.value,
+    githubRepositories: githubRepositories.value,
     automationAuthors: automationAuthors.value,
     syncIntervalMinutes: interval.value,
     authoredGroupTitle: authoredTitle.value,
@@ -74,7 +82,10 @@ function setBusy(isBusy) {
 }
 
 function updateScopeWarning() {
-  const isFullOrganizationScan = repositories.value.trim() === "";
+  const isFullOrganizationScan =
+    organization.value.trim() !== "" &&
+    token.value.trim() !== "" &&
+    repositories.value.trim() === "";
   scopeWarning.hidden = !isFullOrganizationScan;
   scopeWarning.classList.toggle(
     "urgent",

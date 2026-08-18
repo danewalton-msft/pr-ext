@@ -28,6 +28,13 @@ h1 {
   font-size: 20px;
 }
 
+h2 {
+  margin: 24px 0 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #d0d7de;
+  font-size: 16px;
+}
+
 .summary {
   margin: 0 0 6px;
   font-size: 16px;

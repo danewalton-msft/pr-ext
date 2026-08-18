@@ -14,8 +14,8 @@ optionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
 const state = await chrome.runtime.sendMessage({ type: "get-state" });
 if (!state.configured) {
-  summary.textContent = "Azure DevOps is not configured.";
-  details.textContent = "Open Settings and add your Azure DevOps organization and PAT.";
+  summary.textContent = "No PR provider is configured.";
+  details.textContent = "Open Settings and configure Azure DevOps, GitHub, or both.";
   syncButton.disabled = true;
 } else if (state.status) {
   renderResult(state.status);

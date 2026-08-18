@@ -10,12 +10,13 @@
     <main>
       <h1>PR Tab Groups settings</h1>
       <form id="settings-form">
+        <h2>Azure DevOps</h2>
         <label for="organization">Azure DevOps organization</label>
-        <input id="organization" name="organization" type="text" placeholder="contoso or https://dev.azure.com/contoso" required>
+        <input id="organization" name="organization" type="text" placeholder="contoso or https://dev.azure.com/contoso">
         <p class="help">Enter the organization name or its dev.azure.com URL.</p>
 
         <label for="token">Azure DevOps personal access token</label>
-        <input id="token" name="token" type="password" autocomplete="off" required>
+        <input id="token" name="token" type="password" autocomplete="off">
         <p class="help">Use Code (Read). Project and Team (Read) is also needed when scanning the whole organization.</p>
 
         <label for="repositories">Repositories (optional)</label>
@@ -23,9 +24,19 @@
         <p class="help">Enter one repository per line as Project/Repository or an Azure DevOps repository URL. When empty, every accessible repository is scanned.</p>
         <p id="scope-warning" class="scope-warning" hidden>⚠️ Full organization scan enabled. Every accessible repository is queried on each sync; use a repository list or a 15-minute-or-longer interval to reduce Azure DevOps API traffic.</p>
 
+        <h2>GitHub</h2>
+        <label for="github-token">GitHub personal access token</label>
+        <input id="github-token" name="githubToken" type="password" autocomplete="off">
+        <p class="help">Use a fine-grained token with Pull requests (Read) and Contents (Read) for the selected repositories.</p>
+
+        <label for="github-repositories">GitHub repositories</label>
+        <textarea id="github-repositories" name="githubRepositories" rows="5" placeholder="owner/repository&#10;https://github.com/owner/repository"></textarea>
+        <p class="help">Enter one repository per line as owner/repository or a GitHub repository URL.</p>
+
+        <h2>Shared behavior</h2>
         <label for="automation-authors">Automation PR authors</label>
         <textarea id="automation-authors" name="automationAuthors" rows="3" placeholder="Agency&#10;GitHub Copilot"></textarea>
-        <p class="help">Active PRs created by these identities stay in My open PRs when a commit author or Co-authored-by trailer matches your Azure DevOps identity.</p>
+        <p class="help">Active PRs created by these identities stay in My open PRs when a commit author or Co-authored-by trailer matches your provider identity.</p>
 
         <label for="interval">Sync interval</label>
         <select id="interval" name="syncIntervalMinutes">
