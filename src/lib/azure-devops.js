@@ -118,6 +118,7 @@ export async function getAuthenticatedUser(organization, token, fetchImpl = fetc
 
   return {
     ...primary,
+    displayName: primary.displayName ?? primary.providerDisplayName,
     matchingIdentities: deduplicateIdentities(identities)
   };
 }
@@ -203,15 +204,9 @@ export function sameIdentity(left, right) {
   if (!left || !right) {
     return false;
   }
-  if (left.id && right.id && left.id.toLowerCase() === right.id.toLowerCase()) {
-    return true;
-  }
-  if (left.descriptor && right.descriptor &&
-      left.descriptor === right.descriptor) {
-    return true;
-  }
-  return Boolean(left.uniqueName && right.uniqueName &&
-    left.uniqueName.toLowerCase() === right.uniqueName.toLowerCase());
+
+  const leftAliases = identityAliases(left);
+  return [...identityAliases(right)].some((alias) => leftAliases.has(alias));
 }
 
 function isRepositoryAccessError(error) {
@@ -239,6 +234,33 @@ function deduplicateIdentities(identities) {
   return identities.filter((identity, index) =>
     identities.findIndex((candidate) => sameIdentity(candidate, identity)) === index
   );
+}
+
+function identityAliases(identity) {
+  const properties = identity.properties ?? {};
+  const values = [
+    identity.id,
+    identity.descriptor,
+    identity.subjectDescriptor,
+    identity.uniqueName,
+    identity.displayName,
+    identity.providerDisplayName,
+    identity.customDisplayName,
+    propertyValue(properties.Account),
+    propertyValue(properties.AccountName),
+    propertyValue(properties.Email),
+    propertyValue(properties.Mail)
+  ];
+
+  return new Set(
+    values
+      .filter((value) => typeof value === "string" && value.trim())
+      .map((value) => value.trim().toLowerCase())
+  );
+}
+
+function propertyValue(value) {
+  return typeof value === "object" && value !== null ? value.$value : value;
 }
 
 export function normalizePullRequests(items, organization) {

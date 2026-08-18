@@ -97,6 +97,18 @@ test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
     ),
     true
   );
+  assert.equal(
+    sameIdentity(
+      {
+        providerDisplayName: "Ada Lovelace",
+        properties: {
+          Account: { $value: "ada@example.com" }
+        }
+      },
+      { displayName: "Ada Lovelace", uniqueName: "ada@example.com" }
+    ),
+    true
+  );
   assert.equal(sameIdentity({ id: "one" }, { id: "two" }), false);
 });
 
