@@ -21,7 +21,7 @@ For faster syncs, add one repository per line in Settings using `Project/Reposit
 
 GitHub requires a repository list. Enter one repository per line as `owner/repository` or `https://github.com/owner/repository`.
 
-Settings warns when full-organization scanning is enabled, especially with the 5-minute interval. The default tab groups are **🚀 My open PRs** and **👀 Review requested**; both titles remain customizable.
+Settings warns when full-organization scanning is enabled, especially with the 5-minute interval. The default active tab groups are **🚀 My open PRs**, **👀 Review requested**, and **📌 Assigned / following**; all titles remain customizable.
 
 Across both providers, PRs created by configured automation identities (default: `Agency` and `GitHub Copilot`) are also treated as yours when their commits use your author identity or contain a matching `Co-authored-by` trailer. These PRs remain in **🚀 My open PRs** after you approve them and only leave when they are no longer active.
 
@@ -34,6 +34,10 @@ By default, tabs for PRs that stop matching move to a collapsed green **✅ Comp
 A pull request appears in the review group when it is active, is not a draft, lists you as a reviewer, and either your vote is **No vote** (`0`) or Azure DevOps has flagged you for attention. PRs you have approved are omitted unless they are flagged again.
 
 For GitHub, the extension uses GitHub's `review-requested` search so direct and team-based review requests are included.
+
+The assigned/following group contains active Azure DevOps PRs where you remain a reviewer but have no current review action, plus GitHub PRs where you are an assignee. Review requests take priority over authored/owned PRs, which take priority over assigned/following.
+
+To dismiss review requests you do not plan to handle, open the extension and select one or more PRs under **Review requests**, then choose **Move selected to 📌 Following**. The current PR tab also has a one-click action. Overrides persist across refreshes while PRs remain active and can be batch-restored under **Following overrides**.
 
 ## Development
 

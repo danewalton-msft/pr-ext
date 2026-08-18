@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { mergeProviderResults } from "../src/lib/provider-results.js";
+import {
+  applyReviewDismissals,
+  mergeProviderResults
+} from "../src/lib/provider-results.js";
 
 test("mergeProviderResults combines counts and deduplicates PR URLs", () => {
   const shared = {
@@ -17,7 +20,8 @@ test("mergeProviderResults combines counts and deduplicates PR URLs", () => {
       automationOwnedCount: 1,
       skippedRepositories: [],
       authored: [shared],
-      reviewRequested: []
+      reviewRequested: [],
+      assigned: []
     },
     {
       displayName: "octocat",
@@ -26,7 +30,8 @@ test("mergeProviderResults combines counts and deduplicates PR URLs", () => {
       automationOwnedCount: 0,
       skippedRepositories: ["GitHub: octo/private"],
       authored: [shared],
-      reviewRequested: [shared]
+      reviewRequested: [shared],
+      assigned: [shared]
     }
   ]);
 
@@ -35,4 +40,22 @@ test("mergeProviderResults combines counts and deduplicates PR URLs", () => {
   assert.equal(result.activePullRequestCount, 5);
   assert.equal(result.authored.length, 1);
   assert.equal(result.reviewRequested.length, 1);
+  assert.equal(result.assigned.length, 1);
+});
+
+test("applyReviewDismissals moves dismissed reviews into assigned", () => {
+  const review = {
+    title: "Review",
+    url: "https://github.com/octo/web/pull/2",
+    updatedAt: "2026-02-01T00:00:00Z"
+  };
+  const result = applyReviewDismissals({
+    authored: [],
+    reviewRequested: [review],
+    assigned: []
+  }, new Set([review.url, "https://example.com/stale"]));
+
+  assert.deepEqual(result.reviewRequested, []);
+  assert.deepEqual(result.assigned, [review]);
+  assert.deepEqual([...result.activeDismissedUrls], [review.url]);
 });

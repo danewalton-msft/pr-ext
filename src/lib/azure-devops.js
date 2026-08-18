@@ -118,6 +118,13 @@ export async function getPullRequests(
     ),
     organizationName
   );
+  const assigned = normalizePullRequests(
+    activePullRequests.filter((pullRequest) =>
+      isAssignedReviewer(pullRequest, user.matchingIdentities) &&
+      !needsUserReview(pullRequest, user.matchingIdentities)
+    ),
+    organizationName
+  );
 
   return {
     displayName: user.displayName,
@@ -130,7 +137,8 @@ export async function getPullRequests(
     activePullRequestCount: activePullRequests.length,
     automationOwnedCount: automationOwned.length,
     authored,
-    reviewRequested
+    reviewRequested,
+    assigned
   };
 }
 
@@ -325,6 +333,19 @@ export function needsUserReview(pullRequest, userIdentities) {
       identities.some((identity) => sameIdentity(candidate, identity))
     );
   return Boolean(reviewer && (reviewer.vote === 0 || reviewer.isFlagged));
+}
+
+export function isAssignedReviewer(pullRequest, userIdentities) {
+  const identities = Array.isArray(userIdentities)
+    ? userIdentities
+    : [{ id: userIdentities }];
+  return Boolean(
+    pullRequest.reviewers
+      ?.flatMap((candidate) => [candidate, ...(candidate.votedFor ?? [])])
+      .some((candidate) =>
+        identities.some((identity) => sameIdentity(candidate, identity))
+      )
+  );
 }
 
 function deduplicateIdentities(identities) {

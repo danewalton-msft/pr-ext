@@ -19,7 +19,7 @@ main {
 }
 
 .popup {
-  width: 340px;
+  width: 390px;
 }
 
 .options main {
@@ -37,6 +37,11 @@ h2 {
   padding-bottom: 6px;
   border-bottom: 1px solid #d0d7de;
   font-size: 16px;
+}
+
+.popup h2 {
+  margin-top: 16px;
+  font-size: 14px;
 }
 
 .summary {
@@ -141,6 +146,43 @@ button.secondary {
 
 .checkbox input {
   min-height: auto;
+}
+
+.pr-list {
+  display: grid;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.pr-checkbox {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 2px;
+  border-bottom: 1px solid #d8dee4;
+  font-weight: 400;
+}
+
+.pr-checkbox input {
+  min-height: auto;
+}
+
+.pr-checkbox span {
+  min-width: 0;
+}
+
+.pr-checkbox a,
+.pr-checkbox small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pr-checkbox small {
+  margin-top: 2px;
+  color: #59636e;
 }
 
 .actions {

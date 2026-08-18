@@ -1,7 +1,18 @@
+import { canonicalPullRequestUrl } from "./lib/azure-devops.js";
+
 const summary = document.querySelector("#summary");
 const details = document.querySelector("#details");
 const syncButton = document.querySelector("#sync");
 const optionsButton = document.querySelector("#options");
+const dismissButton = document.querySelector("#dismiss");
+const reviewManager = document.querySelector("#review-manager");
+const reviewList = document.querySelector("#review-list");
+const dismissedSection = document.querySelector("#dismissed-section");
+const dismissedList = document.querySelector("#dismissed-list");
+const dismissSelectedButton = document.querySelector("#dismiss-selected");
+const restoreSelectedButton = document.querySelector("#restore-selected");
+let currentPullRequestUrl = null;
+let currentDisposition = null;
 
 syncButton.addEventListener("click", async () => {
   setBusy(true);
@@ -11,6 +22,28 @@ syncButton.addEventListener("click", async () => {
 });
 
 optionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
+dismissButton.addEventListener("click", async () => {
+  setBusy(true);
+  const result = await chrome.runtime.sendMessage({
+    type: "set-review-dismissal",
+    url: currentPullRequestUrl,
+    dismissed: currentDisposition === "review"
+  });
+  dismissSelectedButton.addEventListener("click", () =>
+    updateSelectedReviews(reviewList, true)
+  );
+  restoreSelectedButton.addEventListener("click", () =>
+    updateSelectedReviews(dismissedList, false)
+  );
+  if (result.ok) {
+    renderResult(result);
+    await updateDisposition();
+  } else {
+    summary.textContent = "Could not update PR";
+    details.textContent = result.error;
+  }
+  setBusy(false);
+});
 
 const state = await chrome.runtime.sendMessage({ type: "get-state" });
 if (!state.configured) {
@@ -23,6 +56,7 @@ if (!state.configured) {
   summary.textContent = "Ready to sync.";
   details.textContent = "No pull request sync has run yet.";
 }
+await initializeCurrentTab();
 
 function renderResult(result) {
   if (!result?.ok) {
@@ -31,19 +65,115 @@ function renderResult(result) {
     return;
   }
 
+  const assignedCount = result.assignedCount ?? 0;
   summary.textContent =
-    `${result.authoredCount} open · ${result.reviewCount} awaiting your review`;
+    `${result.authoredCount} open · ${result.reviewCount} to review · ${assignedCount} following`;
   const skipped = result.skippedRepositories?.length
     ? ` · ${result.skippedRepositories.length} repos skipped`
     : "";
-  details.textContent = result.authoredCount === 0 && result.reviewCount === 0
+  details.textContent =
+    result.authoredCount === 0 &&
+    result.reviewCount === 0 &&
+    assignedCount === 0
     ? `No matching PRs across ${result.repositoryCount} repositories${skipped} · Updated ${formatDate(result.syncedAt)}`
     : `Signed in as ${result.displayName}${skipped} · Updated ${formatDate(result.syncedAt)}`;
+  renderReviewManager(result);
 }
 
 function setBusy(isBusy) {
   syncButton.disabled = isBusy;
+  dismissButton.disabled = isBusy;
+  dismissSelectedButton.disabled = isBusy;
+  restoreSelectedButton.disabled = isBusy;
   syncButton.textContent = isBusy ? "Syncing..." : "Sync pull requests";
+}
+
+function renderReviewManager(result) {
+  const actionable = result.actionableReviewItems ?? [];
+  const dismissed = result.dismissedReviewItems ?? [];
+  reviewManager.hidden = actionable.length === 0 && dismissed.length === 0;
+  dismissedSection.hidden = dismissed.length === 0;
+  dismissSelectedButton.hidden = actionable.length === 0;
+  renderPullRequestList(reviewList, actionable, "review");
+  renderPullRequestList(dismissedList, dismissed, "dismissed");
+}
+
+function renderPullRequestList(container, items, prefix) {
+  container.replaceChildren();
+
+  for (const [index, item] of items.entries()) {
+    const label = document.createElement("label");
+    label.className = "pr-checkbox";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = item.url;
+    checkbox.id = `${prefix}-${index}`;
+    const text = document.createElement("span");
+    const link = document.createElement("a");
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = item.title;
+    const repository = document.createElement("small");
+    repository.textContent = item.repository;
+    text.append(link, repository);
+    label.append(checkbox, text);
+    container.append(label);
+  }
+}
+
+async function updateSelectedReviews(container, dismissed) {
+  const urls = [...container.querySelectorAll("input:checked")]
+    .map((checkbox) => checkbox.value);
+  if (urls.length === 0) {
+    return;
+  }
+
+  setBusy(true);
+  const result = await chrome.runtime.sendMessage({
+    type: "set-review-dismissals",
+    urls,
+    dismissed
+  });
+  if (result.ok) {
+    renderResult(result);
+    await updateDisposition();
+  } else {
+    summary.textContent = "Could not update PRs";
+    details.textContent = result.error;
+  }
+  setBusy(false);
+}
+
+async function initializeCurrentTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) {
+    return;
+  }
+
+  try {
+    currentPullRequestUrl = canonicalPullRequestUrl(tab.url);
+    await updateDisposition();
+  } catch {
+    currentPullRequestUrl = null;
+  }
+}
+
+async function updateDisposition() {
+  if (!currentPullRequestUrl) {
+    dismissButton.hidden = true;
+    return;
+  }
+
+  const result = await chrome.runtime.sendMessage({
+    type: "get-pr-disposition",
+    url: currentPullRequestUrl
+  });
+  currentDisposition = result.disposition;
+  dismissButton.hidden = !currentDisposition;
+  dismissButton.textContent = currentDisposition === "review"
+    ? "Move current review to 📌 Following"
+    : "Restore current review request";
 }
 
 function formatDate(value) {

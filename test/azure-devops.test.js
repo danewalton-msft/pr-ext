@@ -5,6 +5,7 @@ import {
   canonicalPullRequestUrl,
   commitIncludesIdentity,
   getPullRequests,
+  isAssignedReviewer,
   isAutomationPullRequest,
   needsUserReview,
   normalizeOrganization,
@@ -81,6 +82,15 @@ test("needsUserReview includes neutral or flagged reviewers and excludes drafts"
     }, "user-id"),
     true
   );
+});
+
+test("isAssignedReviewer includes reviewers who already voted", () => {
+  const pullRequest = {
+    reviewers: [{ id: "user-id", vote: 10, isFlagged: false }]
+  };
+
+  assert.equal(isAssignedReviewer(pullRequest, "user-id"), true);
+  assert.equal(needsUserReview(pullRequest, "user-id"), false);
 });
 
 test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
@@ -261,6 +271,7 @@ test("getPullRequests queries active PRs in every repository and classifies them
   assert.equal(result.authored.length, 1);
   assert.equal(result.automationOwnedCount, 0);
   assert.equal(result.reviewRequested.length, 1);
+  assert.equal(result.assigned.length, 0);
   assert.ok(
     urls.some((url) =>
       url.includes("/_apis/connectionData") &&
@@ -355,6 +366,7 @@ test("getPullRequests keeps co-authored automation PRs in authored results", asy
   assert.equal(result.automationOwnedCount, 1);
   assert.equal(result.authored.length, 1);
   assert.equal(result.reviewRequested.length, 0);
+  assert.equal(result.assigned.length, 1);
 });
 
 function jsonResponse(body, status = 200) {

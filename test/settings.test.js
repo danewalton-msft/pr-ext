@@ -19,6 +19,7 @@ test("sanitizeSettings trims values and accepts supported settings", () => {
       syncIntervalMinutes: "30",
       authoredGroupTitle: " Mine ",
       reviewGroupTitle: " Reviews ",
+      assignedGroupTitle: " Following ",
       collapseGroups: true,
       staleTabAction: "close"
     }),
@@ -32,6 +33,7 @@ test("sanitizeSettings trims values and accepts supported settings", () => {
       syncIntervalMinutes: 30,
       authoredGroupTitle: "Mine",
       reviewGroupTitle: "Reviews",
+      assignedGroupTitle: "Following",
       collapseGroups: true,
       staleTabAction: "close"
     }

@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   syncIntervalMinutes: 15,
   authoredGroupTitle: "🚀 My open PRs",
   reviewGroupTitle: "👀 Review requested",
+  assignedGroupTitle: "📌 Assigned / following",
   collapseGroups: false,
   staleTabAction: "complete"
 });
@@ -38,6 +39,10 @@ export function sanitizeSettings(value = {}) {
       value.reviewGroupTitle,
       "ADO review requested",
       DEFAULT_SETTINGS.reviewGroupTitle
+    ),
+    assignedGroupTitle: nonEmptyString(
+      value.assignedGroupTitle,
+      DEFAULT_SETTINGS.assignedGroupTitle
     ),
     collapseGroups: Boolean(value.collapseGroups),
     staleTabAction: staleTabAction(value)

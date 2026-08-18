@@ -3,7 +3,10 @@ import {
   getPullRequests as getAzurePullRequests
 } from "./lib/azure-devops.js";
 import { getGitHubPullRequests, GitHubApiError } from "./lib/github.js";
-import { mergeProviderResults } from "./lib/provider-results.js";
+import {
+  applyReviewDismissals,
+  mergeProviderResults
+} from "./lib/provider-results.js";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
 import { classifyStaleTabs } from "./lib/tab-sync.js";
 
@@ -11,7 +14,8 @@ const ALARM_NAME = "sync-pull-requests";
 const STORAGE_KEYS = {
   settings: "settings",
   status: "syncStatus",
-  managedUrls: "managedPullRequestUrls"
+  managedUrls: "managedPullRequestUrls",
+  dismissedReviewUrls: "dismissedReviewUrls"
 };
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -55,6 +59,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "get-state") {
     getState().then(sendResponse);
+    return true;
+  }
+
+  if (message?.type === "get-pr-disposition") {
+    getPullRequestDisposition(message.url)
+      .then(sendResponse)
+      .catch(() => sendResponse({ disposition: null }));
+    return true;
+  }
+
+  if (message?.type === "set-review-dismissal") {
+    setReviewDismissal(message.url, message.dismissed)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "set-review-dismissals") {
+    setReviewDismissals(message.urls, message.dismissed)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
 
@@ -121,11 +146,19 @@ async function syncPullRequests() {
       await Promise.all(providerRequests)
     );
     const window = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
-    const reviewUrls = new Set(pullRequests.reviewRequested.map(({ url }) => url));
-    const authored = pullRequests.authored.filter(({ url }) => !reviewUrls.has(url));
+    const dismissedState = await chrome.storage.local.get(
+      STORAGE_KEYS.dismissedReviewUrls
+    );
+    const disposition = applyReviewDismissals(
+      pullRequests,
+      new Set(dismissedState[STORAGE_KEYS.dismissedReviewUrls] ?? [])
+    );
+    const { authored, reviewRequested, assigned, activeDismissedUrls } =
+      disposition;
     const currentManagedUrls = new Set([
       ...pullRequests.authored.map(({ url }) => url),
-      ...pullRequests.reviewRequested.map(({ url }) => url)
+      ...pullRequests.reviewRequested.map(({ url }) => url),
+      ...pullRequests.assigned.map(({ url }) => url)
     ]);
     const managedState = await chrome.storage.local.get(STORAGE_KEYS.managedUrls);
     const staleManagedUrls = new Set(
@@ -144,7 +177,16 @@ async function syncPullRequests() {
       staleManagedUrls
     }));
     completedTabIds.push(...await syncGroup({
-      pullRequests: pullRequests.reviewRequested,
+      pullRequests: assigned,
+      title: settings.assignedGroupTitle,
+      color: "yellow",
+      windowId: window.id,
+      collapsed: settings.collapseGroups,
+      staleTabAction: settings.staleTabAction,
+      staleManagedUrls
+    }));
+    completedTabIds.push(...await syncGroup({
+      pullRequests: reviewRequested,
       title: settings.reviewGroupTitle,
       color: "red",
       windowId: window.id,
@@ -162,16 +204,24 @@ async function syncPullRequests() {
       repositoryCount: pullRequests.repositoryCount,
       skippedRepositories: pullRequests.skippedRepositories,
       activePullRequestCount: pullRequests.activePullRequestCount,
-      authoredCount: pullRequests.authored.length,
+      authoredCount: authored.length,
       automationOwnedCount: pullRequests.automationOwnedCount,
-      reviewCount: pullRequests.reviewRequested.length,
+      reviewCount: reviewRequested.length,
+      assignedCount: assigned.length,
+      actionableReviewUrls: reviewRequested.map(({ url }) => url),
+      dismissedReviewUrls: [...activeDismissedUrls],
+      actionableReviewItems: reviewRequested.map(summarizePullRequest),
+      dismissedReviewItems: pullRequests.reviewRequested
+        .filter(({ url }) => activeDismissedUrls.has(url))
+        .map(summarizePullRequest),
       syncedAt: new Date().toISOString()
     };
     await chrome.storage.local.set({
       [STORAGE_KEYS.status]: result,
-      [STORAGE_KEYS.managedUrls]: [...currentManagedUrls]
+      [STORAGE_KEYS.managedUrls]: [...currentManagedUrls],
+      [STORAGE_KEYS.dismissedReviewUrls]: [...activeDismissedUrls]
     });
-    await updateBadge(pullRequests.reviewRequested.length);
+    await updateBadge(reviewRequested.length);
     return result;
   } catch (error) {
     const result = {
@@ -293,6 +343,64 @@ async function groupCompletedTabs(tabIds, windowId) {
 
 async function saveStatus(status) {
   await chrome.storage.local.set({ [STORAGE_KEYS.status]: status });
+}
+
+async function getPullRequestDisposition(value) {
+  const url = canonicalPullRequestUrl(value);
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.status);
+  const status = stored[STORAGE_KEYS.status];
+
+  if (status?.dismissedReviewUrls?.includes(url)) {
+    return { disposition: "dismissed" };
+  }
+  if (status?.actionableReviewUrls?.includes(url)) {
+    return { disposition: "review" };
+  }
+  return { disposition: null };
+}
+
+async function setReviewDismissal(value, dismissed) {
+  return setReviewDismissals([value], dismissed);
+}
+
+async function setReviewDismissals(values, dismissed) {
+  const urls = [...new Set(values.map(canonicalPullRequestUrl))];
+  const stored = await chrome.storage.local.get([
+    STORAGE_KEYS.status,
+    STORAGE_KEYS.dismissedReviewUrls
+  ]);
+  const status = stored[STORAGE_KEYS.status];
+  const eligibleUrls = new Set(
+    dismissed
+      ? status?.actionableReviewUrls ?? []
+      : status?.dismissedReviewUrls ?? []
+  );
+  const allowed = urls.length > 0 && urls.every((url) => eligibleUrls.has(url));
+
+  if (!allowed) {
+    return { ok: false, error: "One or more selected PRs are not eligible." };
+  }
+
+  const dismissedUrls = new Set(
+    stored[STORAGE_KEYS.dismissedReviewUrls] ?? []
+  );
+  if (dismissed) {
+    urls.forEach((url) => dismissedUrls.add(url));
+  } else {
+    urls.forEach((url) => dismissedUrls.delete(url));
+  }
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.dismissedReviewUrls]: [...dismissedUrls]
+  });
+  return syncPullRequests();
+}
+
+function summarizePullRequest(pullRequest) {
+  return {
+    title: pullRequest.title,
+    url: pullRequest.url,
+    repository: pullRequest.repository
+  };
 }
 
 async function updateBadge(reviewCount) {

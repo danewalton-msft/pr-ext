@@ -11,6 +11,17 @@
       <h1>PR Tab Groups</h1>
       <p id="summary" class="summary">Loading...</p>
       <p id="details" class="muted"></p>
+      <button id="dismiss" class="secondary" type="button" hidden></button>
+      <section id="review-manager" hidden>
+        <h2>Review requests</h2>
+        <div id="review-list" class="pr-list"></div>
+        <button id="dismiss-selected" class="secondary" type="button">Move selected to 📌 Following</button>
+        <div id="dismissed-section" hidden>
+          <h2>Following overrides</h2>
+          <div id="dismissed-list" class="pr-list"></div>
+          <button id="restore-selected" class="secondary" type="button">Restore selected reviews</button>
+        </div>
+      </section>
       <button id="sync" type="button">Sync pull requests</button>
       <button id="options" class="secondary" type="button">Settings</button>
     </main>

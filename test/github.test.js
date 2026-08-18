@@ -75,6 +75,7 @@ test("getGitHubPullRequests classifies authored, review, and automation-owned PR
         number: 1,
         updated_at: "2026-01-01T00:00:00Z",
         user: { login: "octocat" },
+        assignees: [],
         base: { repo: { full_name: "octo/web" } }
       },
       {
@@ -83,6 +84,7 @@ test("getGitHubPullRequests classifies authored, review, and automation-owned PR
         number: 2,
         updated_at: "2026-02-01T00:00:00Z",
         user: { login: "github-copilot[bot]" },
+        assignees: [{ login: "octocat" }],
         base: { repo: { full_name: "octo/web" } }
       }
     ]);
@@ -100,6 +102,7 @@ test("getGitHubPullRequests classifies authored, review, and automation-owned PR
   assert.equal(result.automationOwnedCount, 1);
   assert.deepEqual(result.authored.map(({ number }) => number), [2, 1]);
   assert.deepEqual(result.reviewRequested.map(({ number }) => number), [3]);
+  assert.deepEqual(result.assigned.map(({ number }) => number), [2]);
 });
 
 function jsonResponse(body, status = 200) {

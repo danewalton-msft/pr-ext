@@ -82,6 +82,13 @@ export async function getGitHubPullRequests(
     ]),
     reviewRequested: normalizeGitHubPullRequests(
       repositoryResults.flatMap((result) => result.reviewRequested)
+    ),
+    assigned: normalizeGitHubPullRequests(
+      openPulls.filter((pullRequest) =>
+        pullRequest.assignees?.some(
+          (assignee) => assignee.login?.toLowerCase() === user.login.toLowerCase()
+        )
+      )
     )
   };
 }

@@ -10,6 +10,7 @@ const automationAuthors = document.querySelector("#automation-authors");
 const interval = document.querySelector("#interval");
 const authoredTitle = document.querySelector("#authored-title");
 const reviewTitle = document.querySelector("#review-title");
+const assignedTitle = document.querySelector("#assigned-title");
 const collapsed = document.querySelector("#collapsed");
 const staleAction = document.querySelector("#stale-action");
 const status = document.querySelector("#status");
@@ -31,6 +32,7 @@ automationAuthors.value = settings.automationAuthors;
 interval.value = String(settings.syncIntervalMinutes);
 authoredTitle.value = settings.authoredGroupTitle;
 reviewTitle.value = settings.reviewGroupTitle;
+assignedTitle.value = settings.assignedGroupTitle;
 collapsed.checked = settings.collapseGroups;
 staleAction.value = settings.staleTabAction;
 updateScopeWarning();
@@ -56,6 +58,7 @@ form.addEventListener("submit", async (event) => {
     syncIntervalMinutes: interval.value,
     authoredGroupTitle: authoredTitle.value,
     reviewGroupTitle: reviewTitle.value,
+    assignedGroupTitle: assignedTitle.value,
     collapseGroups: collapsed.checked,
     staleTabAction: staleAction.value
   });
@@ -71,7 +74,7 @@ form.addEventListener("submit", async (event) => {
     const automated = result.automationOwnedCount
       ? ` (${result.automationOwnedCount} automation-owned)`
       : "";
-    status.textContent = `Saved. Found ${result.authoredCount} authored/owned${automated} and ${result.reviewCount} awaiting review from ${result.activePullRequestCount} active PRs across ${result.repositoryCount} repositories.${skipped}`;
+    status.textContent = `Saved. Found ${result.authoredCount} authored/owned${automated}, ${result.reviewCount} awaiting review, and ${result.assignedCount ?? 0} assigned/following from ${result.activePullRequestCount} active PRs across ${result.repositoryCount} repositories.${skipped}`;
     status.className = result.skippedRepositories?.length ? "warning" : "success";
   } else {
     status.textContent = result.error;
