@@ -1,3 +1,5 @@
+import { isOldUnreviewedPullRequest } from "./provider-results.js";
+
 const API_VERSION = "7.1";
 const CONNECTION_API_VERSION = "7.1-preview";
 const PAGE_SIZE = 100;
@@ -108,6 +110,36 @@ export async function getPullRequests(
     }
   );
   const automationOwned = automationCandidateResults.filter(Boolean);
+  const authoredKeys = new Set(
+    [...directlyAuthored, ...automationOwned].map(pullRequestKey)
+  );
+  const reviewHistoryCandidates = activePullRequests.filter((pullRequest) =>
+    !authoredKeys.has(pullRequestKey(pullRequest)) &&
+    isAssignedReviewer(pullRequest, user.matchingIdentities) &&
+    isOldUnreviewedPullRequest({
+      createdAt: pullRequest.creationDate,
+      hasReviewed: hasUserReviewed(pullRequest, user.matchingIdentities)
+    })
+  );
+  const reviewHistoryResults = await mapWithConcurrency(
+    reviewHistoryCandidates,
+    6,
+    async (pullRequest) => {
+      const threads = await getPullRequestThreads(
+        organizationName,
+        pullRequest.repository.project.id,
+        pullRequest.repository.id,
+        pullRequest.pullRequestId,
+        token,
+        fetchImpl
+      );
+      return [
+        pullRequestKey(pullRequest),
+        hasUserReviewed(pullRequest, user.matchingIdentities, threads)
+      ];
+    }
+  );
+  const reviewHistoryByKey = new Map(reviewHistoryResults);
   const authored = normalizePullRequests(
     [...directlyAuthored, ...automationOwned],
     organizationName,
@@ -118,7 +150,8 @@ export async function getPullRequests(
       needsUserReview(pullRequest, user.matchingIdentities)
     ),
     organizationName,
-    user.matchingIdentities
+    user.matchingIdentities,
+    reviewHistoryByKey
   );
   const assigned = normalizePullRequests(
     activePullRequests.filter((pullRequest) =>
@@ -126,7 +159,8 @@ export async function getPullRequests(
       !needsUserReview(pullRequest, user.matchingIdentities)
     ),
     organizationName,
-    user.matchingIdentities
+    user.matchingIdentities,
+    reviewHistoryByKey
   );
 
   return {
@@ -143,6 +177,24 @@ export async function getPullRequests(
     reviewRequested,
     assigned
   };
+}
+
+export async function getPullRequestThreads(
+  organization,
+  projectId,
+  repositoryId,
+  pullRequestId,
+  token,
+  fetchImpl = fetch
+) {
+  const response = await azureRequest(
+    organization,
+    `/${encodeURIComponent(projectId)}/_apis/git/repositories/${encodeURIComponent(repositoryId)}/pullRequests/${encodeURIComponent(pullRequestId)}/threads`,
+    { "api-version": API_VERSION },
+    token,
+    fetchImpl
+  );
+  return response.body.value;
 }
 
 export async function getPullRequestCommits(
@@ -335,10 +387,29 @@ export function isAssignedReviewer(pullRequest, userIdentities) {
   return matchingReviewers(pullRequest, userIdentities).length > 0;
 }
 
-export function hasUserReviewed(pullRequest, userIdentities) {
-  return matchingReviewers(pullRequest, userIdentities).some(
+export function hasUserReviewed(pullRequest, userIdentities, threads = []) {
+  if (matchingReviewers(pullRequest, userIdentities).some(
     (reviewer) => Number.isInteger(reviewer.vote) && reviewer.vote !== 0
-  );
+  )) {
+    return true;
+  }
+  const identities = Array.isArray(userIdentities)
+    ? userIdentities
+    : [{ id: userIdentities }];
+  return threads.some((thread) => {
+    const properties = thread.properties ?? {};
+    if (
+      thread.isDeleted ||
+      propertyValue(properties.CodeReviewThreadType) !== "VoteUpdate"
+    ) {
+      return false;
+    }
+    // Vote comments come from a service account, not the reviewer who voted.
+    const voterId = propertyValue(properties.CodeReviewVotedByTfId);
+    const vote = Number(propertyValue(properties.CodeReviewVoteResult));
+    return [-10, -5, 5, 10].includes(vote) &&
+      identities.some((identity) => sameIdentity({ id: voterId }, identity));
+  });
 }
 
 function matchingReviewers(pullRequest, userIdentities) {
@@ -387,7 +458,12 @@ function propertyValue(value) {
   return typeof value === "object" && value !== null ? value.$value : value;
 }
 
-export function normalizePullRequests(items, organization, userIdentities = []) {
+export function normalizePullRequests(
+  items,
+  organization,
+  userIdentities = [],
+  reviewHistoryByKey = new Map()
+) {
   const byUrl = new Map();
 
   for (const item of items) {
@@ -407,7 +483,9 @@ export function normalizePullRequests(items, organization, userIdentities = []) 
       project: item.repository.project?.name ?? "",
       number: item.pullRequestId,
       createdAt: item.creationDate,
-      hasReviewed: hasUserReviewed(item, userIdentities),
+      // Unchecked history stays unknown if the PR ages past the cutoff mid-sync.
+      hasReviewed: hasUserReviewed(item, userIdentities) ||
+        reviewHistoryByKey.get(pullRequestKey(item)),
       updatedAt: item.creationDate
     });
   }

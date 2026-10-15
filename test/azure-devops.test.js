@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AzureDevOpsApiError,
   canonicalPullRequestUrl,
   commitIncludesIdentity,
   getPullRequests,
@@ -14,6 +15,8 @@ import {
   parseRepositoryFilters,
   sameIdentity
 } from "../src/lib/azure-devops.js";
+import { applyReviewDismissals } from "../src/lib/provider-results.js";
+import { filterTabGroupPullRequests } from "../src/lib/tab-sync.js";
 
 test("normalizeOrganization accepts a name or dev.azure.com URL", () => {
   assert.equal(normalizeOrganization("contoso"), "contoso");
@@ -123,6 +126,60 @@ test("hasUserReviewed requires a nonzero vote from the current user", () => {
       votedFor: [{ uniqueName: "ADA@example.com", vote: -5 }]
     }]
   }, [{ uniqueName: "ada@example.com" }]), true);
+});
+
+test("hasUserReviewed recognizes historical votes after the current vote resets", () => {
+  const pullRequest = {
+    reviewers: [{ id: "user-id", vote: 0 }]
+  };
+  for (const vote of [-10, -5, 5, 10]) {
+    const threads = [
+      voteThread("USER-ID", String(vote)),
+      voteThread("user-id", "0")
+    ];
+    assert.equal(hasUserReviewed(pullRequest, "user-id", threads), true);
+    assert.equal(hasUserReviewed(
+      pullRequest, [{ id: "user-id" }], threads
+    ), true);
+    assert.equal(needsUserReview(pullRequest, "user-id"), true);
+  }
+  assert.equal(hasUserReviewed(pullRequest, "user-id", [{
+    properties: {
+      CodeReviewThreadType: "VoteUpdate",
+      CodeReviewVotedByTfId: "user-id",
+      CodeReviewVoteResult: 10
+    }
+  }]), true);
+});
+
+test("historical review detection ignores resets, other voters and unrelated activity", () => {
+  const pullRequest = {
+    reviewers: [{ id: "user-id", vote: 0 }]
+  };
+  const otherUser = voteThread("other-user", "10");
+  otherUser.properties.CodeReviewVotedByDisplayName = { $value: "Ada" };
+  otherUser.comments = [{ author: { id: "user-id" } }];
+  const deleted = { ...voteThread("user-id", "10"), isDeleted: true };
+  const unrelated = voteThread("user-id", "10");
+  unrelated.properties.CodeReviewThreadType.$value = "ReviewersUpdate";
+  const missingVoter = voteThread(undefined, "10");
+  for (const thread of [
+    ...[0, "", null, undefined, "invalid", "1", true].map(
+      (vote) => voteThread("user-id", vote)
+    ),
+    otherUser,
+    deleted,
+    unrelated,
+    missingVoter,
+    { comments: [{ author: { id: "user-id" }, content: "Approved" }] },
+    {}
+  ]) {
+    assert.equal(hasUserReviewed(
+      pullRequest,
+      [{ id: "user-id", displayName: "Ada" }],
+      [thread]
+    ), false);
+  }
 });
 
 test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
@@ -303,7 +360,7 @@ test("getPullRequests queries active PRs in every repository and classifies them
   assert.equal(result.activePullRequestCount, 1);
   assert.equal(result.authored.length, 1);
   assert.equal(result.authored[0].createdAt, "2026-01-01T00:00:00Z");
-  assert.equal(result.reviewRequested[0].hasReviewed, false);
+  assert.equal(result.reviewRequested[0].hasReviewed, undefined);
   assert.equal(result.automationOwnedCount, 0);
   assert.equal(result.reviewRequested.length, 1);
   assert.equal(result.assigned.length, 0);
@@ -404,6 +461,171 @@ test("getPullRequests keeps co-authored automation PRs in authored results", asy
   assert.equal(result.assigned.length, 1);
   assert.equal(result.assigned[0].hasReviewed, true);
 });
+
+test("Azure checks vote history only for older non-owned unreviewed assignments", async () => {
+  const urls = [];
+  const repository = {
+    id: "repository-id",
+    name: "Web",
+    project: { id: "project-id", name: "App" }
+  };
+  const old = "2020-01-01T00:00:00Z";
+  const pullRequest = (number, overrides = {}) => ({
+    title: `PR ${number}`,
+    pullRequestId: number,
+    creationDate: old,
+    createdBy: { id: "another-user" },
+    reviewers: [{ id: "user-id", vote: 0 }],
+    repository,
+    ...overrides
+  });
+  const pullRequests = [
+    pullRequest(1),
+    pullRequest(2),
+    pullRequest(3, { creationDate: new Date().toISOString() }),
+    pullRequest(4, { reviewers: [{ id: "user-id", vote: 10 }] }),
+    pullRequest(5, { createdBy: { id: "user-id" } }),
+    pullRequest(6, { createdBy: { displayName: "Agency" } }),
+    pullRequest(7, { reviewers: [{ id: "another-user", vote: 0 }] }),
+    pullRequest(8, { isDraft: true }),
+    pullRequest(9, {
+      reviewers: [{ id: "user-id", vote: 5, isFlagged: true }]
+    }),
+    pullRequest(10, {
+      reviewers: [{
+        id: "team-id",
+        vote: 0,
+        votedFor: [{ id: "user-id", vote: 0 }]
+      }]
+    }),
+    pullRequest(11)
+  ];
+  const threads = new Map([
+    [1, [voteThread("user-id", "10"), voteThread("user-id", "0")]],
+    [2, [voteThread("another-user", "10")]],
+    [8, [voteThread("user-id", "-5")]],
+    [10, [voteThread("user-id", "5")]],
+    [11, [voteThread("user-id", "0")]]
+  ]);
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    if (url.includes("/_apis/connectionData")) {
+      return jsonResponse({ authorizedUser: { id: "user-id" } });
+    }
+    if (url.includes("/pullRequests/6/commits")) {
+      return jsonResponse({
+        value: [{ author: { id: "user-id" } }]
+      });
+    }
+    const threadMatch = new URL(url).pathname.match(/\/pullRequests\/(\d+)\/threads$/);
+    if (threadMatch) {
+      assert.equal(new URL(url).searchParams.get("api-version"), "7.1");
+      assert.ok(url.includes("/project-id/_apis/git/repositories/repository-id/"));
+      assert.equal(threads.has(Number(threadMatch[1])), true);
+      return jsonResponse({ value: threads.get(Number(threadMatch[1])) });
+    }
+    assert.ok(new URL(url).pathname.endsWith("/pullrequests"));
+    return jsonResponse({ value: pullRequests });
+  };
+
+  const result = await getPullRequests(
+    "contoso", "token", "App/Web", "Agency", fetchImpl
+  );
+  const requested = new Map(result.reviewRequested.map((pr) => [pr.number, pr]));
+  const assigned = new Map(result.assigned.map((pr) => [pr.number, pr]));
+  assert.equal(requested.get(1).hasReviewed, true);
+  assert.equal(requested.get(2).hasReviewed, false);
+  assert.equal(requested.get(3).hasReviewed, undefined);
+  assert.equal(assigned.get(4).hasReviewed, true);
+  assert.equal(assigned.get(8).hasReviewed, true);
+  assert.equal(requested.get(9).hasReviewed, true);
+  assert.equal(requested.get(10).hasReviewed, true);
+  assert.equal(requested.get(11).hasReviewed, false);
+  assert.deepEqual(result.authored.map(({ number }) => number), [5, 6]);
+  assert.equal(urls.filter((url) => url.includes("/threads?")).length, 5);
+
+  const grouped = filterTabGroupPullRequests(applyReviewDismissals(result, new Set()));
+  assert.deepEqual(grouped.reviewRequested.map(({ number }) => number), [3, 1, 9, 10]);
+  assert.deepEqual(grouped.assigned.map(({ number }) => number), [4, 8]);
+  assert.deepEqual(grouped.authored.map(({ number }) => number), [5, 6]);
+});
+
+test("Azure vote-history failures are reported rather than hiding reviewed PRs", async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes("/_apis/connectionData")) {
+      return jsonResponse({ authorizedUser: { id: "user-id" } });
+    }
+    if (url.includes("/threads?")) {
+      return jsonResponse({ message: "Access denied" }, 403);
+    }
+    return jsonResponse({ value: [{
+      title: "Old PR",
+      pullRequestId: 1,
+      creationDate: "2020-01-01T00:00:00Z",
+      createdBy: { id: "another-user" },
+      reviewers: [{ id: "user-id", vote: 0 }],
+      repository: {
+        id: "repository-id",
+        name: "Web",
+        project: { id: "project-id", name: "App" }
+      }
+    }] });
+  };
+
+  await assert.rejects(
+    getPullRequests("contoso", "token", "App/Web", "", fetchImpl),
+    (error) => error instanceof AzureDevOpsApiError && error.status === 403
+  );
+});
+
+test("a PR crossing the age cutoff stays visible until its history is checked", async (t) => {
+  let now = Date.parse("2026-10-15T12:00:00Z");
+  t.mock.method(Date, "now", () => now);
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    if (url.includes("/_apis/connectionData")) {
+      return jsonResponse({ authorizedUser: { id: "user-id" } });
+    }
+    if (url.includes("/threads?")) {
+      return jsonResponse({ value: [voteThread("user-id", "10")] });
+    }
+    return jsonResponse({ value: [{
+      title: "PR at the age cutoff",
+      pullRequestId: 1,
+      creationDate: "2026-10-01T12:00:00Z",
+      createdBy: { id: "another-user" },
+      reviewers: [{ id: "user-id", vote: 0 }],
+      repository: {
+        id: "repository-id",
+        name: "Web",
+        project: { id: "project-id", name: "App" }
+      }
+    }] });
+  };
+
+  const first = await getPullRequests("contoso", "token", "App/Web", "", fetchImpl);
+  assert.equal(urls.some((url) => url.includes("/threads?")), false);
+  now += 1;
+  assert.equal(filterTabGroupPullRequests(first).reviewRequested.length, 1);
+
+  const second = await getPullRequests("contoso", "token", "App/Web", "", fetchImpl);
+  assert.equal(urls.filter((url) => url.includes("/threads?")).length, 1);
+  assert.equal(second.reviewRequested[0].hasReviewed, true);
+  assert.equal(filterTabGroupPullRequests(second).reviewRequested.length, 1);
+});
+
+function voteThread(voterId, vote) {
+  return {
+    comments: [{ author: { id: "service-account-id" }, commentType: "system" }],
+    properties: {
+      CodeReviewThreadType: { $type: "System.String", $value: "VoteUpdate" },
+      CodeReviewVotedByTfId: { $type: "System.String", $value: voterId },
+      CodeReviewVoteResult: { $type: "System.String", $value: vote }
+    },
+    isDeleted: false
+  };
+}
 
 function jsonResponse(body, status = 200) {
   return {

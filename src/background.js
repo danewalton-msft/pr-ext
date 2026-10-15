@@ -388,7 +388,11 @@ async function syncGroup({
     return [];
   }
 
-  await chrome.tabGroups.update(groupId, { title, color, collapsed });
+  await chrome.tabGroups.update(groupId, {
+    title,
+    color,
+    ...(existingGroup ? {} : { collapsed })
+  });
   const groupedTabs = await chrome.tabs.query({ groupId });
   return removeStaleTabs(
     groupedTabs,
@@ -424,13 +428,14 @@ async function removeStaleTabs(
 async function groupCompletedTabs(tabIds, windowId) {
   const title = "✅ Complete";
   const existingGroups = await chrome.tabGroups.query({ windowId, title });
-  const groupId = existingGroups.length > 0
-    ? await chrome.tabs.group({ groupId: existingGroups[0].id, tabIds })
+  const existingGroup = existingGroups[0];
+  const groupId = existingGroup
+    ? await chrome.tabs.group({ groupId: existingGroup.id, tabIds })
     : await chrome.tabs.group({ createProperties: { windowId }, tabIds });
   await chrome.tabGroups.update(groupId, {
     title,
     color: "green",
-    collapsed: true
+    ...(existingGroup ? {} : { collapsed: true })
   });
 }
 

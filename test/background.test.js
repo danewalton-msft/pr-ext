@@ -171,8 +171,185 @@ test("sync defers age-based ungrouping until a tab leaves split view", async (t)
   assert.deepEqual(browser.removedIds, []);
 });
 
+test("sync preserves manual collapsed state for existing active and Complete groups", async (t) => {
+  for (const collapseGroups of [false, true]) {
+    await t.test(`collapse default ${collapseGroups}`, async (t) => {
+      const browser = await mockBackground(t, {
+        settings: { collapseGroups },
+        pullRequests: [
+          pullRequestFixture(1, { createdBy: { id: "user-id" } }),
+          pullRequestFixture(2),
+          pullRequestFixture(3, { reviewers: [{ id: "user-id", vote: 10 }] })
+        ],
+        managedUrls: [1, 2, 3, 4, 5].map(pullRequestUrl),
+        groups: [
+          { id: 11, title: DEFAULT_SETTINGS.authoredGroupTitle, collapsed: !collapseGroups },
+          { id: 12, title: DEFAULT_SETTINGS.reviewGroupTitle, collapsed: !collapseGroups },
+          { id: 13, title: DEFAULT_SETTINGS.assignedGroupTitle, collapsed: !collapseGroups },
+          { id: 14, title: "✅ Complete", collapsed: false }
+        ],
+        tabs: [
+          { id: 1, url: pullRequestUrl(1), groupId: 11 },
+          { id: 2, url: pullRequestUrl(2), groupId: 12 },
+          { id: 3, url: pullRequestUrl(3), groupId: 13 },
+          { id: 4, url: pullRequestUrl(4), groupId: 12 },
+          { id: 5, url: pullRequestUrl(5), groupId: 14 }
+        ]
+      });
+
+      const first = await browser.sync();
+      assert.equal(first.ok, true, first.error);
+      for (const id of [11, 12, 13]) {
+        assert.equal(browser.groups.get(id).collapsed, !collapseGroups);
+      }
+      assert.equal(browser.tabs.get(4).groupId, 14);
+      assert.equal(browser.groups.get(14).collapsed, false);
+      assert.equal(browser.groupUpdates.every(
+        (update) => !Object.hasOwn(update, "collapsed")
+      ), true);
+
+      for (const group of browser.groups.values()) {
+        group.collapsed = !group.collapsed;
+      }
+      const second = await browser.sync();
+      assert.equal(second.ok, true, second.error);
+      for (const id of [11, 12, 13]) {
+        assert.equal(browser.groups.get(id).collapsed, collapseGroups);
+      }
+      assert.equal(browser.groups.get(14).collapsed, true);
+    });
+  }
+});
+
+test("new active groups use the collapse setting without forcing it on later syncs", async (t) => {
+  for (const collapseGroups of [false, true]) {
+    await t.test(`collapse default ${collapseGroups}`, async (t) => {
+      const pullRequests = [
+        pullRequestFixture(1, { createdBy: { id: "user-id" } }),
+        pullRequestFixture(2),
+        pullRequestFixture(3, { reviewers: [{ id: "user-id", vote: 10 }] })
+      ];
+      const browser = await mockBackground(t, {
+        settings: { collapseGroups },
+        pullRequests
+      });
+
+      const first = await browser.sync();
+      assert.equal(first.ok, true, first.error);
+      assert.equal(browser.groups.size, 3);
+      for (const group of browser.groups.values()) {
+        assert.equal(group.collapsed, collapseGroups);
+        group.collapsed = !collapseGroups;
+      }
+      assert.equal(browser.groupUpdates.every(
+        (update) => update.collapsed === collapseGroups
+      ), true);
+
+      pullRequests.push(pullRequestFixture(4));
+      const second = await browser.sync();
+      assert.equal(second.ok, true, second.error);
+      assert.equal(browser.groups.size, 3);
+      assert.equal(browser.createdUrls.includes(pullRequestUrl(4)), true);
+      for (const group of browser.groups.values()) {
+        assert.equal(group.collapsed, !collapseGroups);
+      }
+      assert.equal(browser.groupUpdates.slice(3).every(
+        (update) => !Object.hasOwn(update, "collapsed")
+      ), true);
+    });
+  }
+});
+
+test("new Complete groups start collapsed even when active groups start expanded", async (t) => {
+  const browser = await mockBackground(t, {
+    settings: { collapseGroups: false },
+    pullRequests: [],
+    managedUrls: [pullRequestUrl(1)],
+    groups: [{ id: 11, title: DEFAULT_SETTINGS.reviewGroupTitle, collapsed: false }],
+    tabs: [{ id: 1, url: pullRequestUrl(1), groupId: 11 }]
+  });
+
+  const result = await browser.sync();
+  assert.equal(result.ok, true, result.error);
+  assert.equal(browser.groups.size, 1);
+  const [complete] = browser.groups.values();
+  assert.equal(complete.title, "✅ Complete");
+  assert.equal(complete.collapsed, true);
+  assert.equal(browser.tabs.get(1).groupId, complete.id);
+});
+
+test("past Azure votes keep old PRs grouped before and after vote resets", async (t) => {
+  const pullRequest = pullRequestFixture(1, {
+    creationDate: "2020-01-01T00:00:00Z"
+  });
+  const browser = await mockBackground(t, {
+    pullRequests: [pullRequest],
+    reviewThreads: {
+      1: ["10", "0"].map((vote) => ({
+        properties: {
+          CodeReviewThreadType: { $value: "VoteUpdate" },
+          CodeReviewVotedByTfId: { $value: "user-id" },
+          CodeReviewVoteResult: { $value: vote }
+        }
+      }))
+    },
+    managedUrls: [pullRequestUrl(1)],
+    groups: [{ id: 11, title: DEFAULT_SETTINGS.reviewGroupTitle, collapsed: true }],
+    tabs: [{ id: 1, url: pullRequestUrl(1), groupId: 11 }]
+  });
+
+  const initial = await browser.sync();
+  assert.equal(initial.ok, true, initial.error);
+  assert.equal(initial.reviewCount, 1);
+  assert.equal(browser.tabs.get(1).groupId, 11);
+  assert.equal(browser.groups.get(11).collapsed, true);
+
+  pullRequest.reviewers[0].vote = 10;
+  const approved = await browser.sync();
+  assert.equal(approved.ok, true, approved.error);
+  assert.equal(approved.assignedCount, 1);
+  assert.equal(approved.reviewCount, 0);
+  assert.equal(
+    browser.groups.get(browser.tabs.get(1).groupId).title,
+    DEFAULT_SETTINGS.assignedGroupTitle
+  );
+
+  pullRequest.reviewers[0].vote = 0;
+  const reset = await browser.sync();
+  assert.equal(reset.ok, true, reset.error);
+  assert.equal(reset.reviewCount, 1);
+  assert.equal(reset.assignedCount, 0);
+  assert.equal(
+    browser.groups.get(browser.tabs.get(1).groupId).title,
+    DEFAULT_SETTINGS.reviewGroupTitle
+  );
+  assert.deepEqual(browser.createdUrls, []);
+  assert.deepEqual(browser.removedIds, []);
+});
+
+function pullRequestUrl(number) {
+  return `https://dev.azure.com/contoso/App/_git/Web/pullrequest/${number}`;
+}
+
+function pullRequestFixture(number, overrides = {}) {
+  return {
+    title: `PR ${number}`,
+    pullRequestId: number,
+    creationDate: new Date().toISOString(),
+    createdBy: { id: "another-user" },
+    reviewers: [{ id: "user-id", vote: 0 }],
+    repository: {
+      id: "Web",
+      name: "Web",
+      project: { id: "App", name: "App" }
+    },
+    ...overrides
+  };
+}
+
 async function mockBackground(t, {
   pullRequests,
+  reviewThreads = {},
   settings = {},
   managedUrls = [],
   dismissedUrls = [],
@@ -199,6 +376,7 @@ async function mockBackground(t, {
   const createdUrls = [];
   const groupedIds = [];
   const removedIds = [];
+  const groupUpdates = [];
   const previousChrome = globalThis.chrome;
   let onMessage;
   let badge;
@@ -222,9 +400,16 @@ async function mockBackground(t, {
   t.mock.method(globalThis, "fetch", async (value) => {
     const requestUrl = new URL(value);
     assert.equal(requestUrl.origin, "https://dev.azure.com");
-    const body = requestUrl.pathname.endsWith("/_apis/connectionData")
-      ? { authorizedUser: { id: "user-id", displayName: "Test user" } }
-      : { value: pullRequests };
+    const threadMatch = requestUrl.pathname.match(/\/pullRequests\/(\d+)\/threads$/);
+    let body;
+    if (requestUrl.pathname.endsWith("/_apis/connectionData")) {
+      body = { authorizedUser: { id: "user-id", displayName: "Test user" } };
+    } else if (threadMatch) {
+      body = { value: reviewThreads[threadMatch[1]] ?? [] };
+    } else {
+      assert.equal(requestUrl.pathname.endsWith("/pullrequests"), true);
+      body = { value: pullRequests };
+    }
     return {
       ok: true,
       headers: { get: () => null },
@@ -266,6 +451,7 @@ async function mockBackground(t, {
       },
       async update(id, values) {
         assert.equal(groupsById.has(id), true, `Group ${id} no longer exists`);
+        groupUpdates.push({ id, ...values });
         Object.assign(groupsById.get(id), values);
       }
     },
@@ -318,6 +504,7 @@ async function mockBackground(t, {
     createdUrls,
     groupedIds,
     removedIds,
+    groupUpdates,
     badge: () => badge,
     sync: () => new Promise((resolve) => {
       assert.equal(onMessage({ type: "sync" }, {}, resolve), true);

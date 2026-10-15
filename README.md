@@ -9,6 +9,8 @@ PR Tab Groups is a dependency-free Manifest V3 extension for Microsoft Edge. It 
 
 Classification precedence is **My open PRs**, then **Review requested**, then **Assigned / following**. A PR appears in only one active group.
 
+Existing groups keep their current collapsed or expanded state during sync. The **Start new active PR groups collapsed** setting controls only newly created active groups. New **✅ Complete** groups start collapsed, but you can expand them without the next sync collapsing them again.
+
 ## Install or update
 
 1. Open `edge://extensions`.
@@ -100,7 +102,9 @@ For GitHub, the extension uses GitHub's `review-requested` search, including dir
 
 PRs assigned to you or requesting your review are excluded from tab groups once they are more than 14 days old if you have not reviewed them. Age is measured from PR creation, not the last update. They remain in the popup, and review requests still count toward the badge. Manually moving a review to following does not bypass this rule.
 
-For Azure DevOps, a nonzero review vote counts as reviewed, including when the PR is flagged for attention again. For GitHub, a submitted approval, request for changes, or comment review counts, even if the review was later dismissed; a pending review does not. GitHub review history is checked only for older assignments and review requests.
+For Azure DevOps, a current or previous nonzero review vote counts as reviewed, including when the PR is flagged for attention again. Before excluding an older PR with no current vote, the extension checks its vote history. A vote reset after new commits does not make a previously reviewed PR disappear; it can return to **👀 Review requested** if another review is needed. This also works when the vote reset before your first sync.
+
+For GitHub, a submitted approval, request for changes, or comment review counts, even if the review was later dismissed; a pending review does not. Review history is checked only for older assignments and review requests.
 
 PRs you authored or co-authored are never excluded by age. Older PRs you have reviewed also stay grouped. Existing tabs for excluded PRs are left open and removed from the extension's groups, including **✅ Complete**, rather than closed or marked complete. Tabs in split view are left alone until they leave the split, and tabs in groups you created yourself are left alone. If you later review an excluded PR, it can be grouped again on the next sync.
 
