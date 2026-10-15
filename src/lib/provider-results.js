@@ -27,6 +27,12 @@ export function mergePullRequests(pullRequests) {
   );
 }
 
+export function isOldUnreviewedPullRequest(pullRequest, now = Date.now()) {
+  const twoWeeks = 14 * 24 * 60 * 60 * 1000;
+  return pullRequest.hasReviewed === false &&
+    Date.parse(pullRequest.createdAt) < now - twoWeeks;
+}
+
 export function applyReviewDismissals(pullRequests, dismissedUrls) {
   const authored = pullRequests.authored;
   const authoredUrls = new Set(authored.map(({ url }) => url));

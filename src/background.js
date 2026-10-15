@@ -9,7 +9,12 @@ import {
 } from "./lib/provider-results.js";
 import { runExtensionEvent } from "./lib/extension-events.js";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "./lib/settings.js";
-import { classifyStaleTabs, shouldGroupTab } from "./lib/tab-sync.js";
+import {
+  classifyStaleTabs,
+  excludedManagedTabIds,
+  filterTabGroupPullRequests,
+  shouldGroupTab
+} from "./lib/tab-sync.js";
 
 const ALARM_NAME = "sync-pull-requests";
 const STORAGE_KEYS = {
@@ -162,20 +167,36 @@ async function syncPullRequests() {
     );
     const { authored, reviewRequested, assigned, activeDismissedUrls } =
       disposition;
+    const groupedPullRequests = filterTabGroupPullRequests(disposition);
     const currentManagedUrls = new Set([
       ...pullRequests.authored.map(({ url }) => url),
       ...pullRequests.reviewRequested.map(({ url }) => url),
       ...pullRequests.assigned.map(({ url }) => url)
     ]);
     const managedState = await chrome.storage.local.get(STORAGE_KEYS.managedUrls);
+    const previousManagedUrls = new Set(
+      managedState[STORAGE_KEYS.managedUrls] ?? []
+    );
     const staleManagedUrls = new Set(
-      (managedState[STORAGE_KEYS.managedUrls] ?? [])
+      [...previousManagedUrls]
         .filter((url) => !currentManagedUrls.has(url))
+    );
+
+    await ungroupExcludedTabs(
+      groupedPullRequests.excludedUrls,
+      previousManagedUrls,
+      window.id,
+      [
+        settings.authoredGroupTitle,
+        settings.assignedGroupTitle,
+        settings.reviewGroupTitle,
+        "✅ Complete"
+      ]
     );
 
     const completedTabIds = [];
     completedTabIds.push(...await syncGroup({
-      pullRequests: authored,
+      pullRequests: groupedPullRequests.authored,
       title: settings.authoredGroupTitle,
       color: "blue",
       windowId: window.id,
@@ -184,7 +205,7 @@ async function syncPullRequests() {
       staleManagedUrls
     }));
     completedTabIds.push(...await syncGroup({
-      pullRequests: assigned,
+      pullRequests: groupedPullRequests.assigned,
       title: settings.assignedGroupTitle,
       color: "yellow",
       windowId: window.id,
@@ -193,7 +214,7 @@ async function syncPullRequests() {
       staleManagedUrls
     }));
     completedTabIds.push(...await syncGroup({
-      pullRequests: reviewRequested,
+      pullRequests: groupedPullRequests.reviewRequested,
       title: settings.reviewGroupTitle,
       color: "red",
       windowId: window.id,
@@ -243,6 +264,31 @@ async function syncPullRequests() {
     await saveStatus(result);
     await updateBadge(null);
     return result;
+  }
+}
+
+async function ungroupExcludedTabs(
+  excludedUrls,
+  managedUrls,
+  windowId,
+  groupTitles
+) {
+  if (excludedUrls.size === 0) {
+    return;
+  }
+  const groups = await chrome.tabGroups.query({ windowId });
+  const groupIds = new Set(
+    groups.filter(({ title }) => groupTitles.includes(title)).map(({ id }) => id)
+  );
+  const tabs = await chrome.tabs.query({ windowId });
+  const tabIds = excludedManagedTabIds(
+    tabs.filter(({ groupId }) => groupIds.has(groupId)),
+    managedUrls,
+    excludedUrls,
+    chrome.tabs.SPLIT_VIEW_ID_NONE ?? -1
+  );
+  if (tabIds.length > 0) {
+    await chrome.tabs.ungroup(tabIds);
   }
 }
 
@@ -362,7 +408,8 @@ async function removeStaleTabs(
     groupedTabs,
     currentTabIds,
     staleManagedUrls,
-    staleTabAction
+    staleTabAction,
+    chrome.tabs.SPLIT_VIEW_ID_NONE ?? -1
   );
 
   if (closeTabIds.length > 0) {

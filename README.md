@@ -96,6 +96,14 @@ For Azure DevOps, an active non-draft PR needs your review when you are listed a
 
 For GitHub, the extension uses GitHub's `review-requested` search, including direct and team-based requests.
 
+### Older, unreviewed assignments
+
+PRs assigned to you or requesting your review are excluded from tab groups once they are more than 14 days old if you have not reviewed them. Age is measured from PR creation, not the last update. They remain in the popup, and review requests still count toward the badge. Manually moving a review to following does not bypass this rule.
+
+For Azure DevOps, a nonzero review vote counts as reviewed, including when the PR is flagged for attention again. For GitHub, a submitted approval, request for changes, or comment review counts, even if the review was later dismissed; a pending review does not. GitHub review history is checked only for older assignments and review requests.
+
+PRs you authored or co-authored are never excluded by age. Older PRs you have reviewed also stay grouped. Existing tabs for excluded PRs are left open and removed from the extension's groups, including **✅ Complete**, rather than closed or marked complete. Tabs in split view are left alone until they leave the split, and tabs in groups you created yourself are left alone. If you later review an excluded PR, it can be grouped again on the next sync.
+
 ### Assigned / following
 
 This group contains:

@@ -110,20 +110,23 @@ export async function getPullRequests(
   const automationOwned = automationCandidateResults.filter(Boolean);
   const authored = normalizePullRequests(
     [...directlyAuthored, ...automationOwned],
-    organizationName
+    organizationName,
+    user.matchingIdentities
   );
   const reviewRequested = normalizePullRequests(
     activePullRequests.filter((pullRequest) =>
       needsUserReview(pullRequest, user.matchingIdentities)
     ),
-    organizationName
+    organizationName,
+    user.matchingIdentities
   );
   const assigned = normalizePullRequests(
     activePullRequests.filter((pullRequest) =>
       isAssignedReviewer(pullRequest, user.matchingIdentities) &&
       !needsUserReview(pullRequest, user.matchingIdentities)
     ),
-    organizationName
+    organizationName,
+    user.matchingIdentities
   );
 
   return {
@@ -324,27 +327,28 @@ export function needsUserReview(pullRequest, userIdentities) {
     return false;
   }
 
-  const identities = Array.isArray(userIdentities)
-    ? userIdentities
-    : [{ id: userIdentities }];
-  const reviewer = pullRequest.reviewers
-    ?.flatMap((candidate) => [candidate, ...(candidate.votedFor ?? [])])
-    .find((candidate) =>
-      identities.some((identity) => sameIdentity(candidate, identity))
-    );
+  const [reviewer] = matchingReviewers(pullRequest, userIdentities);
   return Boolean(reviewer && (reviewer.vote === 0 || reviewer.isFlagged));
 }
 
 export function isAssignedReviewer(pullRequest, userIdentities) {
+  return matchingReviewers(pullRequest, userIdentities).length > 0;
+}
+
+export function hasUserReviewed(pullRequest, userIdentities) {
+  return matchingReviewers(pullRequest, userIdentities).some(
+    (reviewer) => Number.isInteger(reviewer.vote) && reviewer.vote !== 0
+  );
+}
+
+function matchingReviewers(pullRequest, userIdentities) {
   const identities = Array.isArray(userIdentities)
     ? userIdentities
     : [{ id: userIdentities }];
-  return Boolean(
-    pullRequest.reviewers
-      ?.flatMap((candidate) => [candidate, ...(candidate.votedFor ?? [])])
-      .some((candidate) =>
-        identities.some((identity) => sameIdentity(candidate, identity))
-      )
+  return (pullRequest.reviewers ?? [])
+    .flatMap((candidate) => [candidate, ...(candidate.votedFor ?? [])])
+    .filter((candidate) =>
+      identities.some((identity) => sameIdentity(candidate, identity))
   );
 }
 
@@ -383,7 +387,7 @@ function propertyValue(value) {
   return typeof value === "object" && value !== null ? value.$value : value;
 }
 
-export function normalizePullRequests(items, organization) {
+export function normalizePullRequests(items, organization, userIdentities = []) {
   const byUrl = new Map();
 
   for (const item of items) {
@@ -402,6 +406,8 @@ export function normalizePullRequests(items, organization) {
       repository: item.repository.name,
       project: item.repository.project?.name ?? "",
       number: item.pullRequestId,
+      createdAt: item.creationDate,
+      hasReviewed: hasUserReviewed(item, userIdentities),
       updatedAt: item.creationDate
     });
   }

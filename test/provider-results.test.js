@@ -3,8 +3,36 @@ import test from "node:test";
 
 import {
   applyReviewDismissals,
+  isOldUnreviewedPullRequest,
   mergeProviderResults
 } from "../src/lib/provider-results.js";
+
+test("isOldUnreviewedPullRequest uses a strict 14-day creation cutoff", () => {
+  const now = Date.parse("2026-10-15T12:00:00Z");
+  const pullRequest = {
+    createdAt: "2026-10-01T12:00:00Z",
+    updatedAt: "2026-10-15T12:00:00Z",
+    hasReviewed: false
+  };
+
+  assert.equal(isOldUnreviewedPullRequest(pullRequest, now), false);
+  assert.equal(isOldUnreviewedPullRequest(pullRequest, now + 1), true);
+  assert.equal(isOldUnreviewedPullRequest(pullRequest, now - 1), false);
+  assert.equal(isOldUnreviewedPullRequest({
+    ...pullRequest,
+    hasReviewed: true
+  }, now + 1), false);
+  assert.equal(isOldUnreviewedPullRequest({
+    ...pullRequest,
+    hasReviewed: undefined
+  }, now + 1), false);
+  for (const createdAt of [undefined, "", "invalid", "2026-10-16T12:00:00Z"]) {
+    assert.equal(isOldUnreviewedPullRequest({
+      ...pullRequest,
+      createdAt
+    }, now), false);
+  }
+});
 
 test("mergeProviderResults combines counts and deduplicates PR URLs", () => {
   const shared = {

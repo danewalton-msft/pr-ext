@@ -1,3 +1,8 @@
+import {
+  isOldUnreviewedPullRequest,
+  mergePullRequests
+} from "./provider-results.js";
+
 const API_ROOT = "https://api.github.com";
 const PAGE_SIZE = 100;
 
@@ -67,6 +72,51 @@ export async function getGitHubPullRequests(
     }
   );
   const automationOwned = automationOwnedResults.filter(Boolean);
+  const authored = normalizeGitHubPullRequests([
+    ...directlyAuthored,
+    ...automationOwned
+  ]);
+  const authoredUrls = new Set(authored.map(({ url }) => url));
+  const reviewRequested = normalizeGitHubPullRequests(
+    repositoryResults.flatMap((result) => result.reviewRequested)
+  );
+  const assigned = normalizeGitHubPullRequests(
+    openPulls.filter((pullRequest) =>
+      pullRequest.assignees?.some(
+        (assignee) => assignee.login?.toLowerCase() === user.login.toLowerCase()
+      )
+    )
+  );
+  const reviewCandidates = mergePullRequests([
+    ...reviewRequested,
+    ...assigned
+  ]).filter((pullRequest) =>
+    !authoredUrls.has(pullRequest.url) &&
+    isOldUnreviewedPullRequest({ ...pullRequest, hasReviewed: false })
+  );
+  const reviewStatuses = new Map(await mapWithConcurrency(
+    reviewCandidates,
+    6,
+    async (pullRequest) => {
+      const reviews = await getPaginated(
+        `/repos/${pullRequest.repository}/pulls/${pullRequest.number}/reviews?per_page=${PAGE_SIZE}`,
+        token,
+        fetchImpl
+      );
+      return [
+        pullRequest.url,
+        reviews.some((review) =>
+          review.user?.login?.toLowerCase() === user.login.toLowerCase() &&
+          ["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED"]
+            .includes(review.state)
+        )
+      ];
+    }
+  ));
+  const withReviewStatus = (pullRequest) => ({
+    ...pullRequest,
+    hasReviewed: reviewStatuses.get(pullRequest.url)
+  });
 
   return {
     displayName: user.name || user.login,
@@ -76,20 +126,9 @@ export async function getGitHubPullRequests(
       .map((result) => `GitHub: ${result.repository.fullName}`),
     activePullRequestCount: openPulls.length,
     automationOwnedCount: automationOwned.length,
-    authored: normalizeGitHubPullRequests([
-      ...directlyAuthored,
-      ...automationOwned
-    ]),
-    reviewRequested: normalizeGitHubPullRequests(
-      repositoryResults.flatMap((result) => result.reviewRequested)
-    ),
-    assigned: normalizeGitHubPullRequests(
-      openPulls.filter((pullRequest) =>
-        pullRequest.assignees?.some(
-          (assignee) => assignee.login?.toLowerCase() === user.login.toLowerCase()
-        )
-      )
-    )
+    authored,
+    reviewRequested: reviewRequested.map(withReviewStatus),
+    assigned: assigned.map(withReviewStatus)
   };
 }
 
@@ -140,6 +179,7 @@ export function normalizeGitHubPullRequests(items) {
       repository: repositoryFromUrl(url),
       project: "GitHub",
       number: item.number,
+      createdAt: item.created_at,
       updatedAt: item.updated_at
     });
   }

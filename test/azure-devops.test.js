@@ -5,6 +5,7 @@ import {
   canonicalPullRequestUrl,
   commitIncludesIdentity,
   getPullRequests,
+  hasUserReviewed,
   isAssignedReviewer,
   isAutomationPullRequest,
   needsUserReview,
@@ -93,6 +94,37 @@ test("isAssignedReviewer includes reviewers who already voted", () => {
   assert.equal(needsUserReview(pullRequest, "user-id"), false);
 });
 
+test("hasUserReviewed requires a nonzero vote from the current user", () => {
+  for (const vote of [-10, -5, 5, 10]) {
+    assert.equal(hasUserReviewed({
+      reviewers: [{ id: "USER-ID", vote, isFlagged: true }]
+    }, "user-id"), true);
+  }
+  for (const vote of [0, undefined, null, "10"]) {
+    assert.equal(hasUserReviewed({
+      reviewers: [{ id: "user-id", vote }]
+    }, "user-id"), false);
+  }
+  assert.equal(hasUserReviewed({
+    reviewers: [{ id: "other-user", vote: 10 }]
+  }, "user-id"), false);
+  assert.equal(hasUserReviewed({}, "user-id"), false);
+  assert.equal(hasUserReviewed({
+    reviewers: [{
+      id: "team-id",
+      vote: 10,
+      votedFor: [{ id: "user-id", vote: 0 }]
+    }]
+  }, "user-id"), false);
+  assert.equal(hasUserReviewed({
+    reviewers: [{
+      id: "team-id",
+      vote: 0,
+      votedFor: [{ uniqueName: "ADA@example.com", vote: -5 }]
+    }]
+  }, [{ uniqueName: "ada@example.com" }]), true);
+});
+
 test("sameIdentity matches Azure DevOps identity IDs or descriptors", () => {
   assert.equal(
     sameIdentity({ id: "USER-ID" }, { id: "user-id" }),
@@ -172,6 +204,7 @@ test("normalizePullRequests deduplicates and sorts by creation date", () => {
   ], "contoso");
 
   assert.deepEqual(result.map(({ number }) => number), [2, 1]);
+  assert.equal(result[0].createdAt, "2026-02-01T00:00:00Z");
 });
 
 test("normalizePullRequests builds a web URL when Azure omits repository.webUrl", () => {
@@ -269,6 +302,8 @@ test("getPullRequests queries active PRs in every repository and classifies them
   assert.deepEqual(result.skippedRepositories, ["app/private"]);
   assert.equal(result.activePullRequestCount, 1);
   assert.equal(result.authored.length, 1);
+  assert.equal(result.authored[0].createdAt, "2026-01-01T00:00:00Z");
+  assert.equal(result.reviewRequested[0].hasReviewed, false);
   assert.equal(result.automationOwnedCount, 0);
   assert.equal(result.reviewRequested.length, 1);
   assert.equal(result.assigned.length, 0);
@@ -367,6 +402,7 @@ test("getPullRequests keeps co-authored automation PRs in authored results", asy
   assert.equal(result.authored.length, 1);
   assert.equal(result.reviewRequested.length, 0);
   assert.equal(result.assigned.length, 1);
+  assert.equal(result.assigned[0].hasReviewed, true);
 });
 
 function jsonResponse(body, status = 200) {
